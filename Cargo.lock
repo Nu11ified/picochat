@@ -1451,6 +1451,7 @@ dependencies = [
  "clap",
  "picochat-core",
  "picochat-data",
+ "picochat-engine",
  "picochat-optim",
  "picochat-tokenizer",
  "picochat-train",

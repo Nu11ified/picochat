@@ -68,6 +68,22 @@ struct Cli {
     /// Path to save trained tokenizer
     #[arg(long)]
     save_tokenizer: Option<String>,
+
+    /// Interactive chat mode
+    #[arg(long)]
+    chat: bool,
+
+    /// Path to model checkpoint directory (for chat/inference)
+    #[arg(long)]
+    load: Option<String>,
+
+    /// Maximum tokens to generate per response
+    #[arg(long, default_value_t = 256)]
+    max_tokens: usize,
+
+    /// Sampling temperature (0 = greedy)
+    #[arg(long, default_value_t = 0.8)]
+    temperature: f32,
 }
 
 fn main() -> Result<()> {
@@ -82,6 +98,8 @@ fn main() -> Result<()> {
         run_tokenizer_train(&cli)?;
     } else if cli.tokenizer_encode {
         run_tokenizer_encode(&cli)?;
+    } else if cli.chat {
+        run_chat(&cli, &device)?;
     } else {
         println!("picochat v0.1.0");
         println!("  --smoke-test  Run forward pass verification");
@@ -227,6 +245,72 @@ fn run_tokenizer_encode(cli: &Cli) -> Result<()> {
 
     let decoded = tok.decode(&ids);
     println!("Decoded: {decoded}");
+
+    Ok(())
+}
+
+fn run_chat(cli: &Cli, device: &Device) -> Result<()> {
+    use std::io::{self, Write, BufRead};
+
+    let ckpt_path = cli.load.as_ref().expect("--load is required for chat");
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required for chat");
+
+    let config = checkpoint::load_config(format!("{ckpt_path}/config.json"))?;
+    let varmap = VarMap::new();
+    let vb = VarBuilder::from_varmap(&varmap, DType::F32, device);
+    let model = GPT::new(&config, vb)?;
+    checkpoint::load_varmap(&varmap, format!("{ckpt_path}/model.safetensors"), device)?;
+
+    let tok = picochat_tokenizer::Tokenizer::load(tok_path)?;
+
+    let assistant_end_id = tok.special()
+        .token_id(picochat_tokenizer::special::SpecialToken::AssistantEnd);
+
+    println!("picochat chat (depth={}, params={:.2}M)",
+        config.n_layer, model.num_parameters() as f64 / 1e6);
+    println!("Type a message and press Enter. 'quit' to exit.\n");
+
+    let stdin = io::stdin();
+    loop {
+        print!("> ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        stdin.lock().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.is_empty() {
+            continue;
+        }
+        if input == "quit" || input == "exit" {
+            break;
+        }
+
+        let prompt = format!(
+            "<|bos|><|user_start|>{input}<|user_end|><|assistant_start|>"
+        );
+        let prompt_tokens = tok.encode(&prompt)?;
+
+        let gen_config = picochat_engine::generate::GenerationConfig {
+            max_new_tokens: cli.max_tokens,
+            sampling: picochat_engine::sampling::SamplingParams {
+                temperature: cli.temperature,
+                top_k: 50,
+                top_p: 0.95,
+            },
+            stop_tokens: vec![assistant_end_id],
+        };
+
+        let output_tokens = picochat_engine::generate::generate(
+            &model,
+            &prompt_tokens,
+            &gen_config,
+            device,
+        )?;
+
+        let response = tok.decode(&output_tokens);
+        println!("{response}\n");
+    }
 
     Ok(())
 }
