@@ -1,0 +1,9 @@
+[package]
+name = "picochat-eval"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+picochat-core = { path = "../picochat-core" }
+anyhow = { workspace = true }
+serde = { workspace = true }

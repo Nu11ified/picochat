@@ -1,0 +1,17 @@
+[package]
+name = "picochat-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "picochat"
+path = "src/main.rs"
+
+[dependencies]
+picochat-core = { path = "../picochat-core" }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/picochat-core",
+    "crates/picochat-tokenizer",
+    "crates/picochat-data",
+    "crates/picochat-optim",
+    "crates/picochat-train",
+    "crates/picochat-eval",
+    "crates/picochat-engine",
+    "crates/picochat-cli",
+]
+
+[workspace.dependencies]
+candle-core = "0.8"
+candle-nn = "0.8"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+rand = "0.8"

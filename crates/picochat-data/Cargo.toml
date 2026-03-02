@@ -1,0 +1,9 @@
+[package]
+name = "picochat-data"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+picochat-tokenizer = { path = "../picochat-tokenizer" }
+anyhow = { workspace = true }
+serde = { workspace = true }
