@@ -2,6 +2,7 @@ use candle_core::{Result, Tensor, D};
 use candle_nn::{linear_no_bias, Linear, Module, VarBuilder};
 
 use crate::config::GPTConfig;
+use crate::kv_cache::LayerCache;
 use crate::norm::rms_norm;
 use crate::rotary::RotaryEmbedding;
 
@@ -63,7 +64,7 @@ impl CausalSelfAttention {
         rope: &RotaryEmbedding,
         rope_offset: usize,
         window_size: (usize, usize),
-        _kv_cache: Option<()>,
+        kv_cache: Option<&mut LayerCache>,
     ) -> Result<Tensor> {
         let (b, t, _c) = x.dims3()?;
 
@@ -104,19 +105,26 @@ impl CausalSelfAttention {
         let k = k.transpose(1, 2)?;
         let v = v.transpose(1, 2)?;
 
+        // KV cache handling: append new K, V and get full cached tensors
+        let (k, v) = match kv_cache {
+            Some(cache) => cache.update(&k, &v)?,
+            None => (k, v),
+        };
+
         // GQA: repeat KV heads
+        let t_k_actual = k.dim(2)?;
         let repeat_factor = self.n_head / self.n_kv_head;
         let k = if repeat_factor > 1 {
             k.unsqueeze(2)?
-                .expand((b, self.n_kv_head, repeat_factor, t, self.head_dim))?
-                .reshape((b, self.n_head, t, self.head_dim))?
+                .expand((b, self.n_kv_head, repeat_factor, t_k_actual, self.head_dim))?
+                .reshape((b, self.n_head, t_k_actual, self.head_dim))?
         } else {
             k
         };
         let v = if repeat_factor > 1 {
             v.unsqueeze(2)?
-                .expand((b, self.n_kv_head, repeat_factor, t, self.head_dim))?
-                .reshape((b, self.n_head, t, self.head_dim))?
+                .expand((b, self.n_kv_head, repeat_factor, t_k_actual, self.head_dim))?
+                .reshape((b, self.n_head, t_k_actual, self.head_dim))?
         } else {
             v
         };
@@ -124,7 +132,7 @@ impl CausalSelfAttention {
         // Scaled dot-product attention
         let scale = (self.head_dim as f64).sqrt();
         let attn_weights = (q.matmul(&k.transpose(2, 3)?)? / scale)?;
-        let attn_weights = apply_causal_mask(&attn_weights, window_size)?;
+        let attn_weights = apply_causal_mask(&attn_weights, window_size, rope_offset)?;
         let attn_weights = candle_nn::ops::softmax(&attn_weights, D::Minus1)?;
         let y = attn_weights.matmul(&v)?;
 
@@ -137,17 +145,22 @@ impl CausalSelfAttention {
     }
 }
 
-fn apply_causal_mask(attn_weights: &Tensor, window_size: (usize, usize)) -> Result<Tensor> {
+fn apply_causal_mask(
+    attn_weights: &Tensor,
+    window_size: (usize, usize),
+    offset: usize,
+) -> Result<Tensor> {
     let (_, _, t_q, t_k) = attn_weights.dims4()?;
     let device = attn_weights.device();
     let neg_inf = f32::NEG_INFINITY;
     let mut mask_data = vec![0.0f32; t_q * t_k];
     for i in 0..t_q {
+        let abs_i = offset + i;
         for j in 0..t_k {
-            if j > i {
+            if j > abs_i {
                 // Future positions: always masked
                 mask_data[i * t_k + j] = neg_inf;
-            } else if window_size.0 < t_k && (i - j) > window_size.0 {
+            } else if window_size.0 < t_k && (abs_i - j) > window_size.0 {
                 // Outside sliding window: masked
                 mask_data[i * t_k + j] = neg_inf;
             }

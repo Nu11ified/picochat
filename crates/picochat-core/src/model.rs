@@ -3,6 +3,7 @@ use candle_nn::{embedding, linear_no_bias, Embedding, Linear, Module, VarBuilder
 
 use crate::attention::CausalSelfAttention;
 use crate::config::GPTConfig;
+use crate::kv_cache::{KVCache, LayerCache};
 use crate::mlp::MLP;
 use crate::norm::rms_norm;
 use crate::rotary::RotaryEmbedding;
@@ -27,9 +28,12 @@ impl Block {
         rope: &RotaryEmbedding,
         rope_offset: usize,
         window_size: (usize, usize),
+        kv_cache: Option<&mut LayerCache>,
     ) -> Result<Tensor> {
         // Pre-norm residual: x = x + attn(rms_norm(x))
-        let x = (x + self.attn.forward(&rms_norm(x)?, ve, rope, rope_offset, window_size, None)?)?;
+        let x = (x + self
+            .attn
+            .forward(&rms_norm(x)?, ve, rope, rope_offset, window_size, kv_cache)?)?;
         // Pre-norm residual: x = x + mlp(rms_norm(x))
         let x = (&x + self.mlp.forward(&rms_norm(&x)?)?)?;
         Ok(x)
@@ -103,7 +107,7 @@ impl GPT {
         })
     }
 
-    /// Forward pass. Returns logits (B, T, vocab_size) if targets is None,
+    /// Forward pass for training. Returns logits (B, T, vocab_size) if targets is None,
     /// or scalar cross-entropy loss if targets are provided.
     pub fn forward(&self, idx: &Tensor, targets: Option<&Tensor>) -> Result<Tensor> {
         // Embed tokens: (B, T) -> (B, T, n_embd)
@@ -128,13 +132,14 @@ impl GPT {
                 None => None,
             };
 
-            // Run block forward
+            // Run block forward (no KV cache during training)
             x = self.blocks[i].forward(
                 &x,
                 ve.as_ref(),
                 &self.rope,
                 0, // rope_offset
                 self.window_sizes[i],
+                None,
             )?;
         }
 
@@ -165,6 +170,59 @@ impl GPT {
         } else {
             Ok(logits)
         }
+    }
+
+    /// Forward pass for inference with KV caching. Returns logits (B, T, vocab_size).
+    ///
+    /// On the first call (prefill), pass the full prompt as `idx`.
+    /// On subsequent calls (decode), pass one token at a time.
+    /// The cache tracks position offsets automatically.
+    pub fn forward_with_cache(&self, idx: &Tensor, cache: &mut KVCache) -> Result<Tensor> {
+        let rope_offset = cache.seq_len();
+
+        let mut x = self.wte.forward(idx)?;
+        x = rms_norm(&x)?;
+        let x0 = x.clone();
+
+        for i in 0..self.blocks.len() {
+            let resid_lambda = self.resid_lambdas.get(i)?.unsqueeze(0)?.unsqueeze(0)?;
+            let x0_lambda = self.x0_lambdas.get(i)?.unsqueeze(0)?.unsqueeze(0)?;
+            x = (resid_lambda.broadcast_mul(&x)? + x0_lambda.broadcast_mul(&x0)?)?;
+
+            let ve = match &self.value_embeds[i] {
+                Some(ve_embed) => Some(ve_embed.forward(idx)?),
+                None => None,
+            };
+
+            x = self.blocks[i].forward(
+                &x,
+                ve.as_ref(),
+                &self.rope,
+                rope_offset,
+                self.window_sizes[i],
+                Some(&mut cache.layers[i]),
+            )?;
+        }
+
+        x = rms_norm(&x)?;
+        let logits = self.lm_head.forward(&x)?;
+        let logits = logits.narrow(D::Minus1, 0, self.config.vocab_size)?;
+        let logits = logits.to_dtype(DType::F32)?;
+
+        let cap = 15.0f64;
+        let logits = ((logits / cap)?.tanh()? * cap)?;
+
+        Ok(logits)
+    }
+
+    /// Number of transformer layers.
+    pub fn n_layers(&self) -> usize {
+        self.config.n_layer
+    }
+
+    /// Reference to the model configuration.
+    pub fn config(&self) -> &GPTConfig {
+        &self.config
     }
 
     /// Approximate parameter count by summing tensor element counts from the model.
