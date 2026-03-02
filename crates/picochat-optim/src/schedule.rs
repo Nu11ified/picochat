@@ -21,6 +21,11 @@ impl LrSchedule {
         }
     }
 
+    /// Return the base (peak) learning rate.
+    pub fn base_lr(&self) -> f64 {
+        self.base_lr
+    }
+
     /// Return the learning rate for the given training step.
     pub fn get_lr(&self, step: usize) -> f64 {
         if step < self.warmup_steps {

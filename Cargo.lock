@@ -1081,6 +1081,8 @@ dependencies = [
  "picochat-core",
  "picochat-data",
  "picochat-optim",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
