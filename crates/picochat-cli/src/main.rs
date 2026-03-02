@@ -40,6 +40,34 @@ struct Cli {
     /// Save checkpoint to this directory
     #[arg(long)]
     save: Option<String>,
+
+    /// Train a BPE tokenizer from a text file
+    #[arg(long)]
+    tokenizer_train: bool,
+
+    /// Encode text with a trained tokenizer
+    #[arg(long)]
+    tokenizer_encode: bool,
+
+    /// Path to training data (text file or parquet)
+    #[arg(long)]
+    data: Option<String>,
+
+    /// Vocabulary size for tokenizer training
+    #[arg(long, default_value_t = 32768)]
+    vocab_size: usize,
+
+    /// Path to save/load tokenizer JSON
+    #[arg(long)]
+    tokenizer: Option<String>,
+
+    /// Text to encode (for --tokenizer-encode)
+    #[arg(long)]
+    text: Option<String>,
+
+    /// Path to save trained tokenizer
+    #[arg(long)]
+    save_tokenizer: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -50,6 +78,10 @@ fn main() -> Result<()> {
         run_smoke_test(&cli, &device)?;
     } else if cli.train {
         run_train(&cli, &device)?;
+    } else if cli.tokenizer_train {
+        run_tokenizer_train(&cli)?;
+    } else if cli.tokenizer_encode {
+        run_tokenizer_encode(&cli)?;
     } else {
         println!("picochat v0.1.0");
         println!("  --smoke-test  Run forward pass verification");
@@ -150,6 +182,51 @@ fn run_train(cli: &Cli, device: &Device) -> Result<()> {
         checkpoint::save_config(&config, format!("{path}/config.json"))?;
         println!("Checkpoint saved to {path}/");
     }
+
+    Ok(())
+}
+
+fn run_tokenizer_train(cli: &Cli) -> Result<()> {
+    let data_path = cli.data.as_ref().expect("--data is required for tokenizer training");
+    let save_path = cli.save_tokenizer.as_ref().expect("--save-tokenizer is required");
+
+    println!("Training BPE tokenizer (vocab_size={})...", cli.vocab_size);
+    println!("Reading data from: {data_path}");
+
+    // Read text: if .parquet, use parquet reader; otherwise read as plain text
+    let text = if data_path.ends_with(".parquet") {
+        picochat_data::parquet::read_all_text(data_path, "text")?
+    } else {
+        std::fs::read_to_string(data_path)?
+    };
+
+    println!("Training text: {} bytes", text.len());
+    let tok = picochat_tokenizer::Tokenizer::train(&text, cli.vocab_size)?;
+    println!("Learned {} merges", tok.num_merges());
+
+    tok.save(save_path)?;
+    println!("Tokenizer saved to: {save_path}");
+
+    // Quick sample encode
+    let sample = &text[..text.len().min(200)];
+    let ids = tok.encode(sample)?;
+    println!("Sample encode: {} chars -> {} tokens (ratio: {:.2}x)",
+        sample.len(), ids.len(), sample.len() as f64 / ids.len() as f64);
+
+    Ok(())
+}
+
+fn run_tokenizer_encode(cli: &Cli) -> Result<()> {
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required");
+    let text = cli.text.as_ref().expect("--text is required");
+
+    let tok = picochat_tokenizer::Tokenizer::load(tok_path)?;
+    let ids = tok.encode(text)?;
+    println!("Text: {text}");
+    println!("Tokens ({} total): {:?}", ids.len(), ids);
+
+    let decoded = tok.decode(&ids);
+    println!("Decoded: {decoded}");
 
     Ok(())
 }
