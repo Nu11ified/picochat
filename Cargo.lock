@@ -1487,6 +1487,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "picochat-core",
+ "rand 0.8.5",
 ]
 
 [[package]]
