@@ -29,13 +29,13 @@ pub struct BpeVocab {
 
 /// Train a BPE tokenizer on the given text.
 ///
-/// `vocab_size` must be at least `NUM_BYTES + 16 + 1` (256 byte tokens + 16 special tokens
-/// + at least 1 merge slot, though 0 merges is fine if the text is too short).
+/// `vocab_size` must be at least 272 (256 byte tokens + 16 special tokens).
+/// Zero merges is valid (if text is too short or vocab_size == 272).
 ///
 /// The number of merge iterations is `vocab_size - 256 - 16`. If no pair has frequency >= 2,
 /// training stops early.
 pub fn train_bpe(text: &str, vocab_size: usize) -> Result<BpeVocab> {
-    let num_special = 16;
+    let num_special = crate::special::SpecialToken::COUNT;
     if vocab_size < NUM_BYTES + num_special {
         bail!(
             "vocab_size ({}) must be at least {} (256 bytes + 16 special tokens)",
@@ -81,10 +81,12 @@ pub fn train_bpe(text: &str, vocab_size: usize) -> Result<BpeVocab> {
             }
         }
 
-        // Find most frequent pair
+        // Find most frequent pair (deterministic tie-breaking by pair value)
         let best = pair_counts
             .iter()
-            .max_by_key(|&(_, &count)| count);
+            .max_by(|&(&pair_a, &count_a), &(&pair_b, &count_b)| {
+                count_a.cmp(&count_b).then_with(|| pair_b.cmp(&pair_a))
+            });
 
         match best {
             Some((&pair, &count)) if count >= 2 => {
@@ -120,7 +122,9 @@ pub fn train_bpe(text: &str, vocab_size: usize) -> Result<BpeVocab> {
 }
 
 /// Reconstruct a `BpeVocab` from a serialized `BpeModel`.
-pub fn vocab_from_model(model: &BpeModel) -> BpeVocab {
+///
+/// Returns an error if the model contains merges that reference unknown token IDs.
+pub fn vocab_from_model(model: &BpeModel) -> Result<BpeVocab> {
     let mut vocab: HashMap<u32, Vec<u8>> = HashMap::new();
     for i in 0..NUM_BYTES {
         vocab.insert(i as u32, vec![i as u8]);
@@ -131,17 +135,23 @@ pub fn vocab_from_model(model: &BpeModel) -> BpeVocab {
         let new_id = (NUM_BYTES + i) as u32;
         merge_map.insert(pair, new_id);
 
-        let mut new_bytes = vocab[&pair.0].clone();
-        new_bytes.extend_from_slice(&vocab[&pair.1]);
+        let left = vocab.get(&pair.0).ok_or_else(|| {
+            anyhow::anyhow!("merge ({}, {}) references unknown token {}", pair.0, pair.1, pair.0)
+        })?.clone();
+        let right = vocab.get(&pair.1).ok_or_else(|| {
+            anyhow::anyhow!("merge ({}, {}) references unknown token {}", pair.0, pair.1, pair.1)
+        })?;
+        let mut new_bytes = left;
+        new_bytes.extend_from_slice(right);
         vocab.insert(new_id, new_bytes);
     }
 
-    BpeVocab {
+    Ok(BpeVocab {
         vocab_size: model.vocab_size,
         merges: model.merges.clone(),
         merge_map,
         vocab,
-    }
+    })
 }
 
 /// Replace all occurrences of `pair` in `ids` with `new_id`.
