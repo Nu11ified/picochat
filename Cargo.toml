@@ -22,3 +22,5 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 rand = "0.8"
 fancy-regex = "0.14"
+parquet = { version = "53", default-features = false, features = ["arrow"] }
+arrow = { version = "53", default-features = false, features = ["prettyprint"] }

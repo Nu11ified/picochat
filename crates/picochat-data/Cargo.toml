@@ -8,3 +8,5 @@ picochat-tokenizer = { path = "../picochat-tokenizer" }
 anyhow = { workspace = true }
 serde = { workspace = true }
 rand = { workspace = true }
+parquet = { workspace = true }
+arrow = { workspace = true }
