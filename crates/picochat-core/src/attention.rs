@@ -130,6 +130,10 @@ impl CausalSelfAttention {
         };
 
         // Scaled dot-product attention
+        // contiguous() needed because transpose/expand can produce non-contiguous views
+        let q = q.contiguous()?;
+        let k = k.contiguous()?;
+        let v = v.contiguous()?;
         let scale = (self.head_dim as f64).sqrt();
         let attn_weights = (q.matmul(&k.transpose(2, 3)?)? / scale)?;
         let attn_weights = apply_causal_mask(&attn_weights, window_size, rope_offset)?;

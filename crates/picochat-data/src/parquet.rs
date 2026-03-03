@@ -95,3 +95,39 @@ pub fn read_all_text(path: impl AsRef<Path>, column_name: &str) -> Result<String
     }
     Ok(texts.join("\n"))
 }
+
+/// Convert a plain text file to a parquet file with a "text" column.
+/// Splits the input on double newlines to create one row per paragraph.
+pub fn text_to_parquet(input: impl AsRef<Path>, output: impl AsRef<Path>) -> Result<()> {
+    use arrow::array::StringArray;
+    use arrow::datatypes::{DataType, Field, Schema};
+    use arrow::record_batch::RecordBatch;
+    use parquet::arrow::ArrowWriter;
+    use std::sync::Arc;
+
+    let raw = std::fs::read_to_string(input.as_ref())
+        .with_context(|| format!("failed to read {}", input.as_ref().display()))?;
+
+    let paragraphs: Vec<&str> = raw
+        .split("\n\n")
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let schema = Arc::new(Schema::new(vec![Field::new("text", DataType::Utf8, false)]));
+    let array = StringArray::from(paragraphs);
+    let num_paragraphs = array.len();
+    let batch = RecordBatch::try_new(schema.clone(), vec![Arc::new(array)])?;
+
+    if let Some(parent) = output.as_ref().parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = File::create(output.as_ref())
+        .with_context(|| format!("failed to create {}", output.as_ref().display()))?;
+    let mut writer = ArrowWriter::try_new(file, schema, None)?;
+    writer.write(&batch)?;
+    writer.close()?;
+
+    println!("{} paragraphs written to {}", num_paragraphs, output.as_ref().display());
+    Ok(())
+}

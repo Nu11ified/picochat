@@ -172,6 +172,14 @@ struct Cli {
     /// Quantize model weights to INT8
     #[arg(long)]
     quantize: bool,
+
+    /// Convert a text file to parquet format for pretraining
+    #[arg(long)]
+    prepare_data: bool,
+
+    /// Output path for --prepare-data
+    #[arg(long)]
+    output: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -202,6 +210,8 @@ fn main() -> Result<()> {
         run_serve(&cli)?;
     } else if cli.quantize {
         run_quantize(&cli, &device)?;
+    } else if cli.prepare_data {
+        run_prepare_data(&cli)?;
     } else {
         println!("picochat v0.1.0");
         println!("  --smoke-test   Run forward pass verification");
@@ -213,6 +223,7 @@ fn main() -> Result<()> {
         println!("  --eval-arc     Evaluate ARC-Challenge accuracy");
         println!("  --serve        Start web UI server");
         println!("  --quantize     Quantize model to INT8");
+        println!("  --prepare-data Convert text file to parquet");
         println!("  --chat         Interactive chat mode");
     }
     Ok(())
@@ -620,5 +631,13 @@ fn run_quantize(cli: &Cli, device: &Device) -> Result<()> {
     println!("  Quantizable (2D): {quantized_count} ({:.1}%)",
         quantized_count as f64 / total_params as f64 * 100.0);
 
+    Ok(())
+}
+
+fn run_prepare_data(cli: &Cli) -> Result<()> {
+    let input = cli.data.as_ref().expect("--data is required for --prepare-data");
+    let output = cli.output.as_ref().expect("--output is required for --prepare-data");
+    println!("Converting {} to parquet...", input);
+    picochat_data::parquet::text_to_parquet(input, output)?;
     Ok(())
 }
