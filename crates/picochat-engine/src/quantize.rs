@@ -52,7 +52,7 @@ pub fn dequantize_tensor(qt: &QuantizedTensor, device: &Device) -> Result<Tensor
         }
     }
 
-    Tensor::new(fp32, device)?.reshape(&[rows, cols])
+    Ok(Tensor::new(fp32, device)?.reshape(&[rows, cols])?)
 }
 
 /// Compute maximum quantization error between original and dequantized tensor.

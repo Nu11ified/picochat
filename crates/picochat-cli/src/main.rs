@@ -593,11 +593,11 @@ fn run_quantize(cli: &Cli, device: &Device) -> Result<()> {
     let _model = picochat_core::model::GPT::new(&config, vb)?;
     picochat_train::checkpoint::load_varmap(&varmap, format!("{ckpt_dir}/model.safetensors"), device)?;
 
-    let vars = varmap.all_vars();
+    let data = varmap.data().lock().unwrap();
     let mut quantized_count = 0usize;
     let mut total_params = 0usize;
 
-    for (name, var) in vars.iter() {
+    for (name, var) in data.iter() {
         let tensor = var.as_tensor();
         let dims = tensor.dims();
         let num: usize = dims.iter().product();
@@ -609,6 +609,7 @@ fn run_quantize(cli: &Cli, device: &Device) -> Result<()> {
             quantized_count += num;
         }
     }
+    drop(data);
 
     std::fs::create_dir_all(save_dir)?;
     picochat_train::checkpoint::save_varmap(&varmap, format!("{save_dir}/model.safetensors"))?;

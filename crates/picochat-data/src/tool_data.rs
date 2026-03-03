@@ -30,13 +30,13 @@ pub fn format_tool_prompt(scenario: &ToolScenario) -> String {
     );
 
     prompt.push_str("Q: What is 15 * 23?\n");
-    prompt.push_str("<think_start>I need to multiply 15 by 23. Let me use the calculator.</think_end>\n");
+    prompt.push_str("<think_start>I need to multiply 15 by 23. Let me use the calculator.<think_end>\n");
     prompt.push_str("<tool_call_start>15 * 23<tool_call_end>\n");
     prompt.push_str("<tool_result_start>345<tool_result_end>\n");
     prompt.push_str("#### 345\n\n");
 
     prompt.push_str("Q: How many times does the letter 'a' appear in 'banana'?\n");
-    prompt.push_str("<think_start>I need to count occurrences of 'a' in 'banana'. I'll use the count method.</think_end>\n");
+    prompt.push_str("<think_start>I need to count occurrences of 'a' in 'banana'. I'll use the count method.<think_end>\n");
     prompt.push_str("<tool_call_start>\"banana\".count(\"a\")<tool_call_end>\n");
     prompt.push_str("<tool_result_start>3<tool_result_end>\n");
     prompt.push_str("#### 3\n\n");
