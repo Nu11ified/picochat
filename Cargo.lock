@@ -1452,8 +1452,10 @@ dependencies = [
  "picochat-core",
  "picochat-data",
  "picochat-engine",
+ "picochat-eval",
  "picochat-optim",
  "picochat-tokenizer",
+ "picochat-tool",
  "picochat-train",
 ]
 
@@ -1478,6 +1480,7 @@ dependencies = [
  "picochat-tokenizer",
  "rand 0.8.5",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1488,6 +1491,8 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "picochat-core",
+ "picochat-tokenizer",
+ "picochat-tool",
  "rand 0.8.5",
 ]
 
@@ -1496,8 +1501,15 @@ name = "picochat-eval"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "candle-core",
+ "candle-nn",
  "picochat-core",
+ "picochat-data",
+ "picochat-engine",
+ "picochat-tokenizer",
+ "rand 0.8.5",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1520,6 +1532,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "picochat-tool"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "picochat-train"
 version = "0.1.0"
 dependencies = [
@@ -1528,7 +1547,12 @@ dependencies = [
  "candle-nn",
  "picochat-core",
  "picochat-data",
+ "picochat-engine",
+ "picochat-eval",
  "picochat-optim",
+ "picochat-tokenizer",
+ "picochat-tool",
+ "rand 0.8.5",
  "serde",
  "serde_json",
 ]

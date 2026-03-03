@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 picochat-core = { path = "../picochat-core" }
+picochat-tool = { path = "../picochat-tool" }
+picochat-tokenizer = { path = "../picochat-tokenizer" }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 anyhow = { workspace = true }

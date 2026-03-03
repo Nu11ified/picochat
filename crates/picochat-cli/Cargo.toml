@@ -13,7 +13,9 @@ picochat-train = { path = "../picochat-train" }
 picochat-data = { path = "../picochat-data" }
 picochat-tokenizer = { path = "../picochat-tokenizer" }
 picochat-engine = { path = "../picochat-engine" }
+picochat-eval = { path = "../picochat-eval" }
 picochat-optim = { path = "../picochat-optim" }
+picochat-tool = { path = "../picochat-tool" }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 clap = { workspace = true }

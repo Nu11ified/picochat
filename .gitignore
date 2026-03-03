@@ -1,3 +1,5 @@
 target/
 docs/plans/
 spec.md
+.claude/
+.worktrees/
