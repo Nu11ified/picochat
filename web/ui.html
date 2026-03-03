@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>picochat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a2e; color: #e0e0e0;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 12px 20px; background: #16213e;
+    border-bottom: 1px solid #0f3460;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 18px; color: #e94560; }
+  #model-info { font-size: 12px; color: #888; }
+  #messages {
+    flex: 1; overflow-y: auto; padding: 20px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .message { max-width: 800px; width: 100%; margin: 0 auto; }
+  .message-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 4px;
+  }
+  .message.user .message-label { color: #5dade2; }
+  .message.assistant .message-label { color: #e94560; }
+  .message-content {
+    padding: 12px 16px; border-radius: 8px;
+    line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .message.user .message-content { background: #16213e; }
+  .message.assistant .message-content { background: #1f1f38; }
+  .thinking-block {
+    margin: 8px 0; padding: 8px 12px;
+    background: #2a2a4a; border-left: 3px solid #e94560;
+    border-radius: 4px; font-size: 13px; color: #aaa;
+  }
+  .thinking-toggle {
+    cursor: pointer; user-select: none; font-size: 12px;
+    color: #e94560; margin-bottom: 4px;
+  }
+  .thinking-toggle:hover { text-decoration: underline; }
+  .thinking-text { display: none; margin-top: 4px; white-space: pre-wrap; }
+  .thinking-text.open { display: block; }
+  .tool-block {
+    margin: 8px 0; padding: 8px 12px;
+    background: #1e3a1e; border-left: 3px solid #4caf50;
+    border-radius: 4px; font-family: monospace; font-size: 13px;
+  }
+  .tool-label { font-size: 11px; color: #4caf50; margin-bottom: 2px; }
+  .tool-result { color: #81c784; }
+  #input-area {
+    padding: 16px 20px; background: #16213e;
+    border-top: 1px solid #0f3460;
+  }
+  #input-form {
+    max-width: 800px; margin: 0 auto;
+    display: flex; gap: 8px;
+  }
+  #input-field {
+    flex: 1; padding: 10px 14px; border-radius: 8px;
+    border: 1px solid #0f3460; background: #1a1a2e;
+    color: #e0e0e0; font-size: 14px; outline: none;
+  }
+  #input-field:focus { border-color: #e94560; }
+  #send-btn {
+    padding: 10px 20px; border-radius: 8px; border: none;
+    background: #e94560; color: white; font-size: 14px;
+    cursor: pointer; font-weight: 600;
+  }
+  #send-btn:hover { background: #c73e54; }
+  #send-btn:disabled { background: #555; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>picochat</h1>
+  <span id="model-info">loading...</span>
+</header>
+
+<div id="messages"></div>
+
+<div id="input-area">
+  <form id="input-form">
+    <input id="input-field" type="text" placeholder="Type a message..." autocomplete="off" />
+    <button id="send-btn" type="submit">Send</button>
+  </form>
+</div>
+
+<script>
+var API = window.location.origin;
+var messagesEl = document.getElementById('messages');
+var inputField = document.getElementById('input-field');
+var sendBtn = document.getElementById('send-btn');
+var form = document.getElementById('input-form');
+
+fetch(API + '/api/info')
+  .then(function(r) { return r.json(); })
+  .then(function(info) {
+    var m = (info.parameters / 1e6).toFixed(1);
+    document.getElementById('model-info').textContent =
+      'depth=' + info.depth + ' | ' + m + 'M params | vocab=' + info.vocab_size;
+  })
+  .catch(function() {
+    document.getElementById('model-info').textContent = 'not connected';
+  });
+
+function addMessage(role, text) {
+  var div = document.createElement('div');
+  div.className = 'message ' + role;
+
+  var label = document.createElement('div');
+  label.className = 'message-label';
+  label.textContent = role;
+  div.appendChild(label);
+
+  var content = document.createElement('div');
+  content.className = 'message-content';
+  if (text) content.textContent = text;
+  div.appendChild(content);
+
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return content;
+}
+
+function appendThinking(container, text) {
+  var block = document.createElement('div');
+  block.className = 'thinking-block';
+
+  var toggle = document.createElement('div');
+  toggle.className = 'thinking-toggle';
+  toggle.textContent = '\u25B6 Thinking...';
+  block.appendChild(toggle);
+
+  var body = document.createElement('div');
+  body.className = 'thinking-text';
+  body.textContent = text;
+  block.appendChild(body);
+
+  toggle.addEventListener('click', function() {
+    body.classList.toggle('open');
+  });
+
+  container.appendChild(block);
+}
+
+function appendToolCall(container, expr, result) {
+  var block = document.createElement('div');
+  block.className = 'tool-block';
+
+  var lbl = document.createElement('div');
+  lbl.className = 'tool-label';
+  lbl.textContent = 'Tool Call';
+  block.appendChild(lbl);
+
+  var exprEl = document.createElement('div');
+  exprEl.textContent = expr;
+  block.appendChild(exprEl);
+
+  if (result) {
+    var resEl = document.createElement('div');
+    resEl.className = 'tool-result';
+    resEl.textContent = '\u2192 ' + result;
+    block.appendChild(resEl);
+  }
+
+  container.appendChild(block);
+}
+
+form.addEventListener('submit', function(e) {
+  e.preventDefault();
+  var msg = inputField.value.trim();
+  if (!msg) return;
+
+  inputField.value = '';
+  sendBtn.disabled = true;
+
+  addMessage('user', msg);
+  var container = addMessage('assistant', '');
+
+  fetch(API + '/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: msg }),
+  })
+  .then(function(resp) {
+    var reader = resp.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+    var lastToolExpr = '';
+
+    function readChunk() {
+      return reader.read().then(function(result) {
+        if (result.done) return;
+        buffer += decoder.decode(result.value, { stream: true });
+
+        var lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (var li = 0; li < lines.length; li++) {
+          var trimmed = lines[li].replace(/^data:\s*/, '').trim();
+          if (!trimmed) continue;
+          try {
+            var payload = JSON.parse(trimmed);
+            if (payload.type === 'text') {
+              container.appendChild(document.createTextNode(payload.content));
+            } else if (payload.type === 'thinking') {
+              appendThinking(container, payload.content);
+            } else if (payload.type === 'tool_call') {
+              lastToolExpr = payload.content;
+            } else if (payload.type === 'tool_result') {
+              appendToolCall(container, lastToolExpr, payload.content);
+              lastToolExpr = '';
+            } else if (payload.type === 'error') {
+              container.textContent = 'Error: ' + payload.content;
+            }
+          } catch (parseErr) { /* skip malformed SSE lines */ }
+        }
+
+        return readChunk();
+      });
+    }
+
+    return readChunk();
+  })
+  .catch(function(err) {
+    container.textContent = 'Connection error: ' + err.message;
+  })
+  .then(function() {
+    sendBtn.disabled = false;
+    inputField.focus();
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+});
+
+inputField.focus();
+</script>
+</body>
+</html>
