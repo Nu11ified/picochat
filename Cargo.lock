@@ -1529,6 +1529,7 @@ dependencies = [
  "picochat-core",
  "picochat-data",
  "picochat-optim",
+ "picochat-tokenizer",
  "serde",
  "serde_json",
 ]
