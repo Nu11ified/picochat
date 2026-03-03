@@ -156,6 +156,10 @@ struct Cli {
     /// GRPO KL penalty weight
     #[arg(long, default_value_t = 0.04)]
     kl_beta: f64,
+
+    /// Evaluate ARC-Challenge accuracy
+    #[arg(long)]
+    eval_arc: bool,
 }
 
 fn main() -> Result<()> {
@@ -180,6 +184,8 @@ fn main() -> Result<()> {
         run_eval_bpb(&cli, &device)?;
     } else if cli.grpo {
         run_grpo(&cli, &device)?;
+    } else if cli.eval_arc {
+        run_eval_arc(&cli, &device)?;
     } else {
         println!("picochat v0.1.0");
         println!("  --smoke-test   Run forward pass verification");
@@ -188,6 +194,7 @@ fn main() -> Result<()> {
         println!("  --sft          Supervised fine-tuning");
         println!("  --eval-bpb     Evaluate BPB on validation data");
         println!("  --grpo         GRPO reasoning training");
+        println!("  --eval-arc     Evaluate ARC-Challenge accuracy");
         println!("  --chat         Interactive chat mode");
     }
     Ok(())
@@ -510,4 +517,32 @@ fn run_grpo(cli: &Cli, device: &Device) -> Result<()> {
     };
 
     picochat_train::grpo::grpo(&config, device)
+}
+
+fn run_eval_arc(cli: &Cli, device: &Device) -> Result<()> {
+    let ckpt_dir = cli.load.as_ref().expect("--load is required for ARC evaluation");
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required for ARC evaluation");
+    let arc_path = cli.arc_data.as_ref().expect("--arc-data is required for ARC evaluation");
+
+    let config = picochat_train::checkpoint::load_config(format!("{ckpt_dir}/config.json"))?;
+    let varmap = candle_nn::VarMap::new();
+    let vb = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, device);
+    let model = picochat_core::model::GPT::new(&config, vb)?;
+    picochat_train::checkpoint::load_varmap(&varmap, format!("{ckpt_dir}/model.safetensors"), device)?;
+
+    let tokenizer = picochat_tokenizer::Tokenizer::load(tok_path)?;
+    let questions = picochat_data::arc::load_arc_jsonl(arc_path)?;
+
+    let (exemplars, test) = if questions.len() > 5 {
+        (questions[..5].to_vec(), questions[5..].to_vec())
+    } else {
+        (vec![], questions)
+    };
+
+    let result = picochat_eval::arc::evaluate_arc(
+        &model, &tokenizer, &exemplars, &test, device,
+    )?;
+
+    println!("ARC: {:.1}% ({}/{})", result.accuracy * 100.0, result.num_correct, result.num_total);
+    Ok(())
 }
