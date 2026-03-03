@@ -168,6 +168,10 @@ struct Cli {
     /// Server port
     #[arg(long, default_value_t = 8000)]
     port: u16,
+
+    /// Quantize model weights to INT8
+    #[arg(long)]
+    quantize: bool,
 }
 
 fn main() -> Result<()> {
@@ -196,6 +200,8 @@ fn main() -> Result<()> {
         run_eval_arc(&cli, &device)?;
     } else if cli.serve {
         run_serve(&cli)?;
+    } else if cli.quantize {
+        run_quantize(&cli, &device)?;
     } else {
         println!("picochat v0.1.0");
         println!("  --smoke-test   Run forward pass verification");
@@ -206,6 +212,7 @@ fn main() -> Result<()> {
         println!("  --grpo         GRPO reasoning training");
         println!("  --eval-arc     Evaluate ARC-Challenge accuracy");
         println!("  --serve        Start web UI server");
+        println!("  --quantize     Quantize model to INT8");
         println!("  --chat         Interactive chat mode");
     }
     Ok(())
@@ -573,4 +580,44 @@ fn run_serve(cli: &Cli) -> Result<()> {
 
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(picochat_serve::serve(&config))
+}
+
+fn run_quantize(cli: &Cli, device: &Device) -> Result<()> {
+    let ckpt_dir = cli.load.as_ref().expect("--load is required for quantize");
+    let save_dir = cli.save.as_ref().expect("--save is required for quantize");
+
+    println!("Loading model from {ckpt_dir}/...");
+    let config = picochat_train::checkpoint::load_config(format!("{ckpt_dir}/config.json"))?;
+    let varmap = candle_nn::VarMap::new();
+    let vb = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, device);
+    let _model = picochat_core::model::GPT::new(&config, vb)?;
+    picochat_train::checkpoint::load_varmap(&varmap, format!("{ckpt_dir}/model.safetensors"), device)?;
+
+    let vars = varmap.all_vars();
+    let mut quantized_count = 0usize;
+    let mut total_params = 0usize;
+
+    for (name, var) in vars.iter() {
+        let tensor = var.as_tensor();
+        let dims = tensor.dims();
+        let num: usize = dims.iter().product();
+        total_params += num;
+        if dims.len() == 2 {
+            let qt = picochat_engine::quantize::quantize_tensor(tensor, device)?;
+            let err = picochat_engine::quantize::quantization_error(tensor, &qt, device)?;
+            println!("  {name}: {:?} -> INT8 (max_err={err:.6})", dims);
+            quantized_count += num;
+        }
+    }
+
+    std::fs::create_dir_all(save_dir)?;
+    picochat_train::checkpoint::save_varmap(&varmap, format!("{save_dir}/model.safetensors"))?;
+    picochat_train::checkpoint::save_config(&config, format!("{save_dir}/config.json"))?;
+
+    println!("Quantization analysis complete:");
+    println!("  Total params: {total_params}");
+    println!("  Quantizable (2D): {quantized_count} ({:.1}%)",
+        quantized_count as f64 / total_params as f64 * 100.0);
+
+    Ok(())
 }
