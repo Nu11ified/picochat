@@ -1452,6 +1452,7 @@ dependencies = [
  "picochat-core",
  "picochat-data",
  "picochat-engine",
+ "picochat-eval",
  "picochat-optim",
  "picochat-tokenizer",
  "picochat-train",

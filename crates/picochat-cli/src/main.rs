@@ -84,6 +84,50 @@ struct Cli {
     /// Sampling temperature (0 = greedy)
     #[arg(long, default_value_t = 0.8)]
     temperature: f32,
+
+    /// Pretrain on parquet data
+    #[arg(long)]
+    pretrain: bool,
+
+    /// SFT on JSONL chat data
+    #[arg(long)]
+    sft: bool,
+
+    /// Evaluate BPB on validation data
+    #[arg(long)]
+    eval_bpb: bool,
+
+    /// Path to validation data (for BPB evaluation)
+    #[arg(long)]
+    val_data: Option<String>,
+
+    /// Maximum learning rate
+    #[arg(long, default_value_t = 0.001)]
+    max_lr: f64,
+
+    /// Warmup steps
+    #[arg(long, default_value_t = 100)]
+    warmup_steps: usize,
+
+    /// Minimum LR ratio
+    #[arg(long, default_value_t = 0.1)]
+    min_lr_ratio: f64,
+
+    /// Checkpoint save frequency
+    #[arg(long, default_value_t = 500)]
+    save_every: usize,
+
+    /// Evaluation frequency during pretraining
+    #[arg(long, default_value_t = 100)]
+    eval_every: usize,
+
+    /// SFT dataset paths and weights (format: path:weight,path:weight)
+    #[arg(long)]
+    sft_data: Option<String>,
+
+    /// Maximum tokens to generate for GSM8K evaluation
+    #[arg(long, default_value_t = 512)]
+    max_gen_tokens: usize,
 }
 
 fn main() -> Result<()> {
@@ -100,10 +144,20 @@ fn main() -> Result<()> {
         run_tokenizer_encode(&cli)?;
     } else if cli.chat {
         run_chat(&cli, &device)?;
+    } else if cli.pretrain {
+        run_pretrain(&cli, &device)?;
+    } else if cli.sft {
+        run_sft(&cli, &device)?;
+    } else if cli.eval_bpb {
+        run_eval_bpb(&cli, &device)?;
     } else {
         println!("picochat v0.1.0");
-        println!("  --smoke-test  Run forward pass verification");
-        println!("  --train       Train on synthetic data");
+        println!("  --smoke-test   Run forward pass verification");
+        println!("  --train        Train on synthetic data");
+        println!("  --pretrain     Pretrain on parquet data");
+        println!("  --sft          Supervised fine-tuning");
+        println!("  --eval-bpb     Evaluate BPB on validation data");
+        println!("  --chat         Interactive chat mode");
     }
     Ok(())
 }
@@ -311,6 +365,92 @@ fn run_chat(cli: &Cli, device: &Device) -> Result<()> {
         let response = tok.decode(&output_tokens);
         println!("{response}\n");
     }
+
+    Ok(())
+}
+
+fn run_pretrain(cli: &Cli, device: &Device) -> Result<()> {
+    let data_dir = cli.data.as_ref().expect("--data is required for pretraining");
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required for pretraining");
+    let save_dir = cli.save.as_ref().expect("--save is required for pretraining");
+
+    let config = picochat_train::pretrain::PretrainConfig {
+        data_dir: data_dir.clone(),
+        val_data: cli.val_data.clone(),
+        tokenizer_path: tok_path.clone(),
+        total_steps: cli.steps,
+        batch_size: cli.batch_size,
+        seq_len: cli.seq_len,
+        max_lr: cli.max_lr,
+        warmup_steps: cli.warmup_steps,
+        min_lr_ratio: cli.min_lr_ratio,
+        eval_every: cli.eval_every,
+        save_every: cli.save_every,
+        save_dir: save_dir.clone(),
+        depth: cli.depth,
+    };
+
+    picochat_train::pretrain::pretrain(&config, device)
+}
+
+fn run_sft(cli: &Cli, device: &Device) -> Result<()> {
+    let ckpt_dir = cli.load.as_ref().expect("--load is required for SFT");
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required for SFT");
+    let save_dir = cli.save.as_ref().expect("--save is required for SFT");
+    let sft_data = cli.sft_data.as_ref().expect("--sft-data is required for SFT");
+
+    let datasets: Vec<(String, f64)> = sft_data
+        .split(',')
+        .map(|s| {
+            let parts: Vec<&str> = s.split(':').collect();
+            let path = parts[0].to_string();
+            let weight = if parts.len() > 1 {
+                parts[1].parse::<f64>().unwrap_or(1.0)
+            } else {
+                1.0
+            };
+            (path, weight)
+        })
+        .collect();
+
+    let config = picochat_train::sft::SftConfig {
+        checkpoint_dir: ckpt_dir.clone(),
+        tokenizer_path: tok_path.clone(),
+        datasets,
+        total_steps: cli.steps,
+        batch_size: cli.batch_size,
+        seq_len: cli.seq_len,
+        max_lr: cli.max_lr,
+        warmup_steps: cli.warmup_steps,
+        min_lr_ratio: cli.min_lr_ratio,
+        save_dir: save_dir.clone(),
+        save_every: cli.save_every,
+    };
+
+    picochat_train::sft::sft(&config, device)
+}
+
+fn run_eval_bpb(cli: &Cli, device: &Device) -> Result<()> {
+    use candle_core::DType;
+
+    let ckpt_dir = cli.load.as_ref().expect("--load is required for BPB evaluation");
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required for BPB evaluation");
+    let val_path = cli.val_data.as_ref().expect("--val-data is required for BPB evaluation");
+
+    let config = picochat_train::checkpoint::load_config(format!("{ckpt_dir}/config.json"))?;
+    let varmap = candle_nn::VarMap::new();
+    let vb = candle_nn::VarBuilder::from_varmap(&varmap, DType::F32, device);
+    let model = picochat_core::model::GPT::new(&config, vb)?;
+    picochat_train::checkpoint::load_varmap(&varmap, format!("{ckpt_dir}/model.safetensors"), device)?;
+
+    let tokenizer = picochat_tokenizer::Tokenizer::load(tok_path)?;
+
+    let result = picochat_eval::bpb::evaluate_bpb(
+        &model, val_path, &tokenizer, cli.batch_size, cli.seq_len, device,
+    )?;
+
+    println!("BPB: {:.4} (tokens={}, bytes={}, avg_loss={:.4})",
+        result.bpb, result.num_tokens, result.num_bytes, result.avg_loss);
 
     Ok(())
 }
