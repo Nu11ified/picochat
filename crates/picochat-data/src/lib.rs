@@ -1,4 +1,5 @@
 // picochat-data: data loading and preprocessing
+pub mod arc;
 pub mod dataloader;
 pub mod mixture;
 pub mod parquet;
