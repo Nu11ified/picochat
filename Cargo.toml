@@ -8,6 +8,7 @@ members = [
     "crates/picochat-train",
     "crates/picochat-eval",
     "crates/picochat-engine",
+    "crates/picochat-tool",
     "crates/picochat-cli",
 ]
 
