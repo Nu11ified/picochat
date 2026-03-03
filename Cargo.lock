@@ -1496,8 +1496,15 @@ name = "picochat-eval"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "candle-core",
+ "candle-nn",
  "picochat-core",
+ "picochat-data",
+ "picochat-engine",
+ "picochat-tokenizer",
+ "rand 0.8.5",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
