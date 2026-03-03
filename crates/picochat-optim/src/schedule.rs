@@ -2,6 +2,7 @@
 /// 1. Linear warmup: 0 -> base_lr over `warmup_steps`
 /// 2. Constant: base_lr
 /// 3. Cosine warmdown: base_lr -> 0 over the final `warmdown_frac` of training
+#[derive(Clone)]
 pub struct LrSchedule {
     base_lr: f64,
     warmup_steps: usize,

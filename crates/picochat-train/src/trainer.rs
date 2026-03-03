@@ -58,4 +58,12 @@ impl Trainer {
     pub fn step_count(&self) -> usize {
         self.step_count
     }
+
+    pub fn schedule_ref(&self) -> Option<&LrSchedule> {
+        self.schedule.as_ref()
+    }
+
+    pub fn optimizer_mut(&mut self) -> &mut MuonAdamW {
+        &mut self.optimizer
+    }
 }
