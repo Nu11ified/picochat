@@ -1,0 +1,19 @@
+[package]
+name = "picochat-serve"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+picochat-core = { path = "../picochat-core" }
+picochat-engine = { path = "../picochat-engine" }
+picochat-tokenizer = { path = "../picochat-tokenizer" }
+picochat-train = { path = "../picochat-train" }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["macros"] }
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+futures = "0.3"

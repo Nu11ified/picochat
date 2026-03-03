@@ -160,6 +160,14 @@ struct Cli {
     /// Evaluate ARC-Challenge accuracy
     #[arg(long)]
     eval_arc: bool,
+
+    /// Start HTTP server for web UI
+    #[arg(long)]
+    serve: bool,
+
+    /// Server port
+    #[arg(long, default_value_t = 8000)]
+    port: u16,
 }
 
 fn main() -> Result<()> {
@@ -186,6 +194,8 @@ fn main() -> Result<()> {
         run_grpo(&cli, &device)?;
     } else if cli.eval_arc {
         run_eval_arc(&cli, &device)?;
+    } else if cli.serve {
+        run_serve(&cli)?;
     } else {
         println!("picochat v0.1.0");
         println!("  --smoke-test   Run forward pass verification");
@@ -195,6 +205,7 @@ fn main() -> Result<()> {
         println!("  --eval-bpb     Evaluate BPB on validation data");
         println!("  --grpo         GRPO reasoning training");
         println!("  --eval-arc     Evaluate ARC-Challenge accuracy");
+        println!("  --serve        Start web UI server");
         println!("  --chat         Interactive chat mode");
     }
     Ok(())
@@ -545,4 +556,21 @@ fn run_eval_arc(cli: &Cli, device: &Device) -> Result<()> {
 
     println!("ARC: {:.1}% ({}/{})", result.accuracy * 100.0, result.num_correct, result.num_total);
     Ok(())
+}
+
+fn run_serve(cli: &Cli) -> Result<()> {
+    let ckpt_path = cli.load.as_ref().expect("--load is required for serve");
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required for serve");
+
+    let config = picochat_serve::ServeConfig {
+        checkpoint_dir: ckpt_path.clone(),
+        tokenizer_path: tok_path.clone(),
+        port: cli.port,
+        max_tokens: cli.max_tokens,
+        temperature: cli.temperature,
+        static_dir: Some("web".to_string()),
+    };
+
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(picochat_serve::serve(&config))
 }

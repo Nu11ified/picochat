@@ -16,7 +16,9 @@ picochat-engine = { path = "../picochat-engine" }
 picochat-eval = { path = "../picochat-eval" }
 picochat-optim = { path = "../picochat-optim" }
 picochat-tool = { path = "../picochat-tool" }
+picochat-serve = { path = "../picochat-serve" }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
+tokio = { version = "1", features = ["full"] }

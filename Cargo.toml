@@ -9,6 +9,7 @@ members = [
     "crates/picochat-eval",
     "crates/picochat-engine",
     "crates/picochat-tool",
+    "crates/picochat-serve",
     "crates/picochat-cli",
 ]
 
