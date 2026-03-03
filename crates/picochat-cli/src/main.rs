@@ -128,6 +128,34 @@ struct Cli {
     /// Maximum tokens to generate for GSM8K evaluation
     #[arg(long, default_value_t = 512)]
     max_gen_tokens: usize,
+
+    /// Run GRPO reasoning training
+    #[arg(long)]
+    grpo: bool,
+
+    /// Path to GSM8K training data (JSONL)
+    #[arg(long)]
+    gsm8k_data: Option<String>,
+
+    /// Path to ARC-Challenge training data (JSONL)
+    #[arg(long)]
+    arc_data: Option<String>,
+
+    /// Path to tool-use scenario data (JSONL)
+    #[arg(long)]
+    tool_data: Option<String>,
+
+    /// GRPO group size (completions per prompt)
+    #[arg(long, default_value_t = 16)]
+    group_size: usize,
+
+    /// GRPO clipping epsilon
+    #[arg(long, default_value_t = 0.2)]
+    clip_eps: f64,
+
+    /// GRPO KL penalty weight
+    #[arg(long, default_value_t = 0.04)]
+    kl_beta: f64,
 }
 
 fn main() -> Result<()> {
@@ -150,6 +178,8 @@ fn main() -> Result<()> {
         run_sft(&cli, &device)?;
     } else if cli.eval_bpb {
         run_eval_bpb(&cli, &device)?;
+    } else if cli.grpo {
+        run_grpo(&cli, &device)?;
     } else {
         println!("picochat v0.1.0");
         println!("  --smoke-test   Run forward pass verification");
@@ -157,6 +187,7 @@ fn main() -> Result<()> {
         println!("  --pretrain     Pretrain on parquet data");
         println!("  --sft          Supervised fine-tuning");
         println!("  --eval-bpb     Evaluate BPB on validation data");
+        println!("  --grpo         GRPO reasoning training");
         println!("  --chat         Interactive chat mode");
     }
     Ok(())
@@ -453,4 +484,31 @@ fn run_eval_bpb(cli: &Cli, device: &Device) -> Result<()> {
         result.bpb, result.num_tokens, result.num_bytes, result.avg_loss);
 
     Ok(())
+}
+
+fn run_grpo(cli: &Cli, device: &Device) -> Result<()> {
+    let ckpt_dir = cli.load.as_ref().expect("--load is required for GRPO");
+    let tok_path = cli.tokenizer.as_ref().expect("--tokenizer is required for GRPO");
+    let save_dir = cli.save.as_ref().expect("--save is required for GRPO");
+
+    let config = picochat_train::grpo::GrpoConfig {
+        checkpoint_dir: ckpt_dir.clone(),
+        tokenizer_path: tok_path.clone(),
+        gsm8k_path: cli.gsm8k_data.clone(),
+        arc_path: cli.arc_data.clone(),
+        tool_data_path: cli.tool_data.clone(),
+        group_size: cli.group_size,
+        total_steps: cli.steps,
+        max_gen_tokens: cli.max_gen_tokens,
+        clip_eps: cli.clip_eps,
+        kl_beta: cli.kl_beta,
+        value_loss_weight: 0.5,
+        learning_rate: cli.max_lr,
+        warmup_steps: cli.warmup_steps,
+        save_dir: save_dir.clone(),
+        save_every: cli.save_every,
+        target_len: 256,
+    };
+
+    picochat_train::grpo::grpo(&config, device)
 }
