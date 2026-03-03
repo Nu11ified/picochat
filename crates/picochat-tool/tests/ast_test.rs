@@ -76,7 +76,7 @@ fn test_parse_operator_precedence() {
     let tokens = tokenize("2 + 3 * 4").unwrap();
     let expr = parse(&tokens).unwrap();
     match expr {
-        Expr::BinOp { op, left, right } => {
+        Expr::BinOp { op, left: _, right } => {
             assert_eq!(op, "+");
             match *right {
                 Expr::BinOp { op, .. } => assert_eq!(op, "*"),

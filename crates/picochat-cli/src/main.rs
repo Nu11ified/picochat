@@ -502,7 +502,6 @@ fn run_grpo(cli: &Cli, device: &Device) -> Result<()> {
         max_gen_tokens: cli.max_gen_tokens,
         clip_eps: cli.clip_eps,
         kl_beta: cli.kl_beta,
-        value_loss_weight: 0.5,
         learning_rate: cli.max_lr,
         warmup_steps: cli.warmup_steps,
         save_dir: save_dir.clone(),

@@ -1,4 +1,4 @@
-use picochat_data::tool_data::{ToolScenario, load_tool_scenarios, format_tool_prompt};
+use picochat_data::tool_data::{ToolScenario, format_tool_prompt};
 
 #[test]
 fn test_tool_scenario_parse() {

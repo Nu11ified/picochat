@@ -15,7 +15,6 @@ use picochat_tokenizer::Tokenizer;
 use crate::checkpoint;
 use crate::rewards::{composite_reward, RewardWeights, TaskType};
 use crate::trainer::Trainer;
-use crate::value_head::ValueHead;
 
 pub struct GrpoConfig {
     pub checkpoint_dir: String,
@@ -28,7 +27,6 @@ pub struct GrpoConfig {
     pub max_gen_tokens: usize,
     pub clip_eps: f64,
     pub kl_beta: f64,
-    pub value_loss_weight: f64,
     pub learning_rate: f64,
     pub warmup_steps: usize,
     pub save_dir: String,
@@ -49,7 +47,6 @@ impl Default for GrpoConfig {
             max_gen_tokens: 512,
             clip_eps: 0.2,
             kl_beta: 0.04,
-            value_loss_weight: 0.5,
             learning_rate: 1e-6,
             warmup_steps: 50,
             save_dir: String::new(),
@@ -255,11 +252,6 @@ pub fn grpo(config: &GrpoConfig, device: &Device) -> Result<()> {
         device,
     )?;
 
-    // Value head (separate VarMap for independent checkpointing)
-    let vh_varmap = VarMap::new();
-    let vh_vb = VarBuilder::from_varmap(&vh_varmap, DType::F32, device);
-    let _value_head = ValueHead::new(model_config.n_embd, vh_vb)?;
-
     println!("GRPO: loaded policy + reference models from {}", config.checkpoint_dir);
     println!("Parameters: {} ({:.2}M)",
         policy_model.num_parameters(), policy_model.num_parameters() as f64 / 1e6);
@@ -366,7 +358,9 @@ pub fn grpo(config: &GrpoConfig, device: &Device) -> Result<()> {
         // 4. Normalize advantages within the group
         let advantages = normalize_advantages(&rewards);
 
-        // 5. Find the best completion (highest advantage)
+        // Best-of-N approximation: apply gradient only to the highest-advantage completion.
+        // The full group is still used for advantage normalization, but updating only one
+        // completion per step keeps memory bounded on CPU.
         let best_idx = advantages.iter().enumerate()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
             .map(|(i, _)| i)
@@ -471,7 +465,6 @@ pub fn grpo(config: &GrpoConfig, device: &Device) -> Result<()> {
             std::fs::create_dir_all(&ckpt_dir)?;
             checkpoint::save_varmap(&policy_varmap, format!("{ckpt_dir}/model.safetensors"))?;
             checkpoint::save_config(&model_config, format!("{ckpt_dir}/config.json"))?;
-            checkpoint::save_varmap(&vh_varmap, format!("{ckpt_dir}/value_head.safetensors"))?;
             println!("GRPO checkpoint saved to {ckpt_dir}/");
         }
     }
@@ -480,7 +473,6 @@ pub fn grpo(config: &GrpoConfig, device: &Device) -> Result<()> {
     std::fs::create_dir_all(&config.save_dir)?;
     checkpoint::save_varmap(&policy_varmap, format!("{}/model.safetensors", config.save_dir))?;
     checkpoint::save_config(&model_config, format!("{}/config.json", config.save_dir))?;
-    checkpoint::save_varmap(&vh_varmap, format!("{}/value_head.safetensors", config.save_dir))?;
 
     let avg_reward = total_reward / config.total_steps as f64;
     let avg_acc = total_accuracy / config.total_steps as f64 * 100.0;

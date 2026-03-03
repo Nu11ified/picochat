@@ -60,6 +60,5 @@ fn test_grpo_config_defaults() {
     assert_eq!(config.group_size, 16);
     assert_eq!(config.clip_eps, 0.2);
     assert_eq!(config.kl_beta, 0.04);
-    assert_eq!(config.value_loss_weight, 0.5);
     assert_eq!(config.max_gen_tokens, 512);
 }

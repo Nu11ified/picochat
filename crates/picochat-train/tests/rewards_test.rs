@@ -83,6 +83,12 @@ fn test_format_reward_think_after_answer() {
 }
 
 #[test]
+fn test_format_reward_think_but_no_answer() {
+    let text = "<think_start>I'm reasoning about this<think_end>";
+    assert_eq!(format_reward(text), 0.0);
+}
+
+#[test]
 fn test_tool_use_reward_correct_and_useful() {
     let text = "<tool_call_start>347 * 892<tool_call_end>\n<tool_result_start>309524<tool_result_end>\n#### 309524";
     assert_eq!(tool_use_reward(text, "309524", true), 1.0);

@@ -115,7 +115,7 @@ pub fn format_reward(text: &str) -> f64 {
     match answer_pos {
         Some(pos) if pos > last_think_end => 1.0,
         Some(_) => 0.0,
-        None => 1.0,
+        None => 0.0,
     }
 }
 

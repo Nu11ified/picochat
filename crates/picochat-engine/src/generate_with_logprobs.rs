@@ -36,7 +36,6 @@ pub fn generate_with_logprobs(
 ) -> Result<(Vec<u32>, Vec<f32>)> {
     let mut cache = KVCache::new(model.n_layers());
 
-    // Prefill
     let prompt = Tensor::new(prompt_tokens, device)?.unsqueeze(0)?;
     let logits = model.forward_with_cache(&prompt, &mut cache)?;
 
@@ -63,7 +62,6 @@ pub fn generate_with_logprobs(
     let mut tool_call_tokens: Vec<u32> = Vec::new();
 
     for _ in 1..config.max_new_tokens {
-        // Check if we just generated a tool_call_start token
         if let (Some(start_id), Some(end_id)) = (config.tool_call_start_id, config.tool_call_end_id) {
             if next_token == start_id && tool_calls_made < config.max_tool_calls {
                 collecting_tool_call = true;
@@ -72,7 +70,6 @@ pub fn generate_with_logprobs(
                 collecting_tool_call = false;
                 tool_calls_made += 1;
 
-                // Run the tool call
                 if let Some(tok) = tokenizer {
                     let expr_text = tok.decode(&tool_call_tokens);
                     let result = picochat_tool::run_tool(&expr_text);

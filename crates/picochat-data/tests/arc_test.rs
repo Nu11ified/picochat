@@ -1,4 +1,4 @@
-use picochat_data::arc::{ArcQuestion, load_arc_jsonl, format_arc_prompt};
+use picochat_data::arc::{ArcQuestion, format_arc_prompt};
 
 #[test]
 fn test_arc_question_parse() {
