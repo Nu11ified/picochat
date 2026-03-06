@@ -121,7 +121,12 @@ The model is a decoder-only transformer with:
 - Learnable residual scaling (per-layer lambdas)
 - Logit soft-capping
 
-The `--depth` flag controls model size. Depth 4 gives a 28M parameter model (256-dim, 4 heads, 4 layers). Larger depths scale accordingly.
+The `--depth` flag controls model size:
+
+| Depth | Params | Layers | Dim | Heads |
+|-------|--------|--------|-----|-------|
+| 4 | 28M | 4 | 256 | 4 |
+| 8 | 90M | 8 | 512 | 8 |
 
 The optimizer is a hybrid of Muon (for 2D weight matrices) and AdamW (for everything else), with per-parameter-group learning rates.
 
@@ -143,6 +148,10 @@ The optimizer is a hybrid of Muon (for 2D weight matrices) and AdamW (for everyt
 ```
 cargo test --workspace
 ```
+
+## Limitations
+
+This is a learning project, not a production language model. The models trained here produce coherent text on topics seen during training but will generate garbled output on novel questions. Getting useful general-purpose chat behavior requires billions of tokens of training data and GPU-scale compute -- far beyond what a CPU-trained 28M-90M parameter model can achieve. The value of this project is in the training framework and pipeline, not the resulting model weights.
 
 ## Acknowledgments
 

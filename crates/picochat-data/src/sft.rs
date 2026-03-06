@@ -45,7 +45,7 @@ pub fn tokenize_conversation(
 
     for msg in &conv.messages {
         match msg.role.as_str() {
-            "user" => {
+            "user" | "system" => {
                 tokens.push(user_start_id);
                 is_assistant.push(false);
 
