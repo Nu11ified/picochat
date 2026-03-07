@@ -81,7 +81,9 @@ fn fill_loader(
 /// Run the pretraining loop.
 pub fn pretrain(config: &PretrainConfig, device: &Device) -> Result<()> {
     let tokenizer = Tokenizer::load(&config.tokenizer_path)?;
-    let model_config = GPTConfig::from_depth(config.depth);
+    let mut model_config = GPTConfig::from_depth(config.depth);
+    // Use the tokenizer's actual vocab size instead of the hardcoded default
+    model_config.vocab_size = tokenizer.vocab_size();
 
     println!("Pretrain: depth={}, seq_len={}, batch={}, steps={}",
         config.depth, config.seq_len, config.batch_size, config.total_steps);
