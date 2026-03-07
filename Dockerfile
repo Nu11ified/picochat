@@ -20,4 +20,4 @@ RUN mkdir -p /app/model && \
 
 EXPOSE 8000
 
-CMD ["/app/picochat", "--serve", "--load", "/app/model", "--tokenizer", "/app/model/tokenizer.json", "--port", "8000"]
+CMD ["/app/picochat", "--serve", "--load", "/app/model", "--tokenizer", "/app/model/tokenizer.json", "--port", "8000", "--temperature", "0.3"]

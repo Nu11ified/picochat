@@ -141,8 +141,8 @@ async fn chat_handler(
             max_think_tokens: max_tokens * 2,
             sampling: SamplingParams {
                 temperature,
-                top_k: 50,
-                top_p: 0.95,
+                top_k: 20,
+                top_p: 0.9,
             },
         };
 
