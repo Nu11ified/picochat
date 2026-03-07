@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/picochat-cli /app/picochat
+COPY --from=builder /app/target/release/picochat /app/picochat
 COPY --from=builder /app/web /app/web
 
 RUN mkdir -p /app/model && \
