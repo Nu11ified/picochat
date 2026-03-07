@@ -15,6 +15,19 @@ The project was inspired by Karpathy's [nanochat](https://github.com/karpathy/na
 cargo build --release
 ```
 
+## Pretrained weights
+
+A pretrained 90M parameter checkpoint is available on [Hugging Face](https://huggingface.co/manasred/picochat). Download the files and run:
+
+```
+mkdir -p runs/model
+# place model.safetensors, config.json, and tokenizer.json in runs/model/
+
+cargo run --release -- \
+  --chat --load runs/model --tokenizer runs/model/tokenizer.json \
+  --temperature 0.8 --max-tokens 256
+```
+
 ## Usage
 
 ### Train a tokenizer
