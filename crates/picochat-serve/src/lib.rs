@@ -143,6 +143,7 @@ async fn chat_handler(
                 temperature,
                 top_k: 20,
                 top_p: 0.9,
+                repetition_penalty: 1.3,
             },
         };
 

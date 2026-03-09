@@ -5,7 +5,7 @@ use picochat_core::model::GPT;
 use picochat_tokenizer::Tokenizer;
 use picochat_tokenizer::special::SpecialToken;
 
-use crate::sampling::{sample, SamplingParams};
+use crate::sampling::{sample_with_history, SamplingParams};
 
 pub struct ReasoningConfig {
     pub max_new_tokens: usize,
@@ -52,7 +52,8 @@ pub fn generate_with_reasoning(
     let t = prompt_tokens.len();
     let last_row = last_logits.get(t - 1)?;
     let logit_vec: Vec<f32> = last_row.to_vec1()?;
-    let mut next_token = sample(&logit_vec, &config.sampling) as u32;
+    let mut all_generated: Vec<u32> = Vec::new();
+    let mut next_token = sample_with_history(&logit_vec, &config.sampling, &all_generated) as u32;
 
     let mut segments: Vec<OutputSegment> = Vec::new();
     let mut current_tokens: Vec<u32> = Vec::new();
@@ -111,7 +112,7 @@ pub fn generate_with_reasoning(
                 let inject_len = inject_tokens.len();
                 let last_inject = inject_logits.flatten(0, 1)?.get(inject_len - 1)?;
                 let logit_vec: Vec<f32> = last_inject.to_vec1()?;
-                next_token = sample(&logit_vec, &config.sampling) as u32;
+                next_token = sample_with_history(&logit_vec, &config.sampling, &all_generated) as u32;
                 continue;
             }
             mode = Mode::Text;
@@ -126,10 +127,11 @@ pub fn generate_with_reasoning(
             current_tokens.push(next_token);
         }
 
+        all_generated.push(next_token);
         let input = candle_core::Tensor::new(&[[next_token]], device)?;
         let logits = model.forward_with_cache(&input, &mut cache)?;
         let logit_vec: Vec<f32> = logits.flatten_all()?.to_vec1()?;
-        next_token = sample(&logit_vec, &config.sampling) as u32;
+        next_token = sample_with_history(&logit_vec, &config.sampling, &all_generated) as u32;
     }
 
     flush(&mut current_tokens, &mut segments, &mode, tokenizer);

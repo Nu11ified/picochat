@@ -3,7 +3,7 @@ use candle_core::{Device, Tensor};
 use picochat_core::kv_cache::KVCache;
 use picochat_core::model::GPT;
 
-use crate::sampling::{sample, SamplingParams};
+use crate::sampling::{sample_with_history, SamplingParams};
 
 /// Configuration for text generation.
 pub struct GenerationConfig {
@@ -49,9 +49,9 @@ pub fn generate(
     let t = prompt_tokens.len();
     let last_row = last_logits.get(t - 1)?; // (vocab,)
     let logit_vec: Vec<f32> = last_row.to_vec1()?;
-    let mut next_token = sample(&logit_vec, &config.sampling) as u32;
+    let mut output: Vec<u32> = Vec::with_capacity(config.max_new_tokens);
+    let mut next_token = sample_with_history(&logit_vec, &config.sampling, &output) as u32;
 
-    let mut output = Vec::with_capacity(config.max_new_tokens);
     output.push(next_token);
 
     // Check stop condition
@@ -65,7 +65,7 @@ pub fn generate(
         let logits = model.forward_with_cache(&input, &mut cache)?; // (1, 1, vocab)
         let logit_vec: Vec<f32> = logits.flatten_all()?.to_vec1()?;
 
-        next_token = sample(&logit_vec, &config.sampling) as u32;
+        next_token = sample_with_history(&logit_vec, &config.sampling, &output) as u32;
         output.push(next_token);
 
         if config.stop_tokens.contains(&next_token) {

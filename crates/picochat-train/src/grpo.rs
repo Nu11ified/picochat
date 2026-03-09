@@ -304,6 +304,7 @@ pub fn grpo(config: &GrpoConfig, device: &Device) -> Result<()> {
             temperature: 0.8,
             top_k: 50,
             top_p: 0.95,
+            repetition_penalty: 1.0,
         },
         stop_tokens: vec![],
         tool_call_start_id: tokenizer.encode("<tool_call_start>").ok()

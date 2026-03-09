@@ -58,6 +58,7 @@ pub fn evaluate_gsm8k(
             temperature: 0.0, // greedy for deterministic evaluation
             top_k: 1,
             top_p: 1.0,
+            repetition_penalty: 1.0,
         },
         stop_tokens: vec![],
     };

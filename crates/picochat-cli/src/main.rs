@@ -416,8 +416,9 @@ fn run_chat(cli: &Cli, device: &Device) -> Result<()> {
             max_new_tokens: cli.max_tokens,
             sampling: picochat_engine::sampling::SamplingParams {
                 temperature: cli.temperature,
-                top_k: 50,
-                top_p: 0.95,
+                top_k: 20,
+                top_p: 0.9,
+                repetition_penalty: 1.3,
             },
             stop_tokens: vec![assistant_end_id],
         };
