@@ -12,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use candle_core::{Device, DType};
 use candle_nn::{VarBuilder, VarMap};
 use picochat_core::model::GPT;
-use picochat_engine::reasoning::{generate_with_reasoning, ReasoningConfig, OutputSegment};
+use picochat_engine::generate::{generate, GenerationConfig};
 use picochat_engine::sampling::SamplingParams;
+use picochat_tokenizer::special::SpecialToken;
 use picochat_tokenizer::Tokenizer;
 
 struct AppState {
@@ -136,22 +137,24 @@ async fn chat_handler(
             }
         };
 
-        let reasoning_config = ReasoningConfig {
+        let assistant_end_id = state.tokenizer.special()
+            .token_id(SpecialToken::AssistantEnd);
+
+        let gen_config = GenerationConfig {
             max_new_tokens: max_tokens,
-            max_think_tokens: max_tokens * 2,
             sampling: SamplingParams {
                 temperature,
                 top_k: 20,
                 top_p: 0.9,
                 repetition_penalty: 1.3,
             },
+            stop_tokens: vec![assistant_end_id],
         };
 
-        let segments = match generate_with_reasoning(
-            &state.model, &prompt_tokens, &reasoning_config,
-            &state.tokenizer, &state.device,
+        let output_tokens = match generate(
+            &state.model, &prompt_tokens, &gen_config, &state.device,
         ) {
-            Ok(s) => s,
+            Ok(t) => t,
             Err(e) => {
                 let payload = SsePayload {
                     r#type: "error".to_string(),
@@ -161,16 +164,12 @@ async fn chat_handler(
             }
         };
 
+        let filtered: Vec<u32> = output_tokens.into_iter()
+            .filter(|&t| t != assistant_end_id)
+            .collect();
+        let response = state.tokenizer.decode(&filtered);
         let mut events = Vec::new();
-        for seg in &segments {
-            let payload = match seg {
-                OutputSegment::Text(t) => SsePayload { r#type: "text".into(), content: t.clone() },
-                OutputSegment::Thinking(t) => SsePayload { r#type: "thinking".into(), content: t.clone() },
-                OutputSegment::ToolCall(t) => SsePayload { r#type: "tool_call".into(), content: t.clone() },
-                OutputSegment::ToolResult(t) => SsePayload { r#type: "tool_result".into(), content: t.clone() },
-            };
-            events.push(serde_json::to_string(&payload).unwrap());
-        }
+        events.push(serde_json::to_string(&SsePayload { r#type: "text".into(), content: response }).unwrap());
         events.push(serde_json::to_string(&SsePayload { r#type: "done".into(), content: String::new() }).unwrap());
 
         Ok(Event::default().data(events.join("\n\n")))
