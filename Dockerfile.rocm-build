@@ -1,0 +1,51 @@
+FROM rocm/dev-ubuntu-24.04:6.3.3
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies + full ROCm stack
+RUN apt-get update && apt-get install -y \
+    python3-pip python3-dev python3-venv \
+    cmake ninja-build git \
+    libblas-dev liblapack-dev \
+    rocm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create venv with system packages access (for cmake to find ROCm cmake configs)
+RUN python3 -m venv --system-site-packages /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python build deps (use system cmake, not pip cmake — ROCm cmake files need it)
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install ninja pyyaml typing-extensions numpy
+
+# Clone PyTorch v2.5.1
+WORKDIR /build
+RUN git clone --depth 1 --branch v2.5.1 --recurse-submodules --shallow-submodules \
+    https://github.com/pytorch/pytorch.git
+
+WORKDIR /build/pytorch
+
+# Install Python requirements
+RUN pip install -r requirements.txt
+
+# Build for gfx1010 ONLY (single target = faster build)
+ENV PYTORCH_ROCM_ARCH=gfx1010
+# Keep parallelism low to avoid OOM on 16GB RAM systems
+ENV CMAKE_BUILD_PARALLEL_LEVEL=4
+ENV MAX_JOBS=4
+ENV USE_CUDA=0
+ENV USE_ROCM=1
+ENV USE_NINJA=1
+ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
+ENV CMAKE_PREFIX_PATH="/opt/rocm"
+
+# hipify CUDA sources to HIP before building
+RUN python3 tools/amd_build/build_amd.py
+
+RUN pip install -v .
+
+# Install other deps for training
+RUN pip install safetensors pyarrow regex packaging
+
+# Default workdir for mounting code
+WORKDIR /workspace
