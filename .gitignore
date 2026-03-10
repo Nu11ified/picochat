@@ -7,3 +7,4 @@ data/
 runs/
 upload_to_hf.py
 hf_model_card.md
+CLAUDE.md
