@@ -410,7 +410,7 @@ def main():
     # Training hyperparameters — tuned for CPU on Ryzen 7 3700X
     batch_size = 4
     seq_len = 256
-    max_steps = 30000
+    max_steps = 15000
     max_lr = 6e-4
     min_lr = max_lr * 0.1
     warmup_steps = 500

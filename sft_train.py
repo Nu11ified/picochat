@@ -36,7 +36,11 @@ from gpu_pretrain import PicoChatGPT, PicoChatTokenizer
 class SFTDataset:
     """Loads chat JSONL data and formats as tokenized training sequences."""
 
-    def __init__(self, jsonl_path: str, tokenizer: PicoChatTokenizer, seq_len: int):
+    def __init__(self, data_sources: list[tuple[str, int]], tokenizer: PicoChatTokenizer, seq_len: int):
+        """Args:
+            data_sources: list of (jsonl_path, repeat_count) tuples.
+                          Each file's examples are repeated repeat_count times.
+        """
         self.tokenizer = tokenizer
         self.seq_len = seq_len
         self.vocab_size = tokenizer.vocab_size
@@ -50,21 +54,31 @@ class SFTDataset:
         self.assistant_end_id = first_special + 4
         self.pad_id = first_special + 15
 
-        print(f"Loading SFT data from {jsonl_path}...")
-        with open(jsonl_path) as f:
-            raw = [json.loads(line) for line in f if line.strip()]
-
         self.examples = []
-        skipped = 0
-        for item in raw:
-            messages = item["messages"]
-            tokens = self._format_chat(messages)
-            if len(tokens) <= seq_len:
-                self.examples.append(tokens)
-            else:
-                skipped += 1
+        total_skipped = 0
 
-        print(f"Loaded {len(self.examples)} examples ({skipped} skipped as too long)")
+        for jsonl_path, repeats in data_sources:
+            print(f"Loading SFT data from {jsonl_path} (repeat={repeats})...")
+            with open(jsonl_path) as f:
+                raw = [json.loads(line) for line in f if line.strip()]
+
+            file_examples = []
+            skipped = 0
+            for item in raw:
+                messages = item["messages"]
+                tokens = self._format_chat(messages)
+                if len(tokens) <= seq_len:
+                    file_examples.append(tokens)
+                else:
+                    skipped += 1
+
+            # Upsample by repeating
+            self.examples.extend(file_examples * repeats)
+            total_skipped += skipped
+            print(f"  {len(file_examples)} examples x {repeats} = {len(file_examples) * repeats} ({skipped} skipped)")
+
+        random.shuffle(self.examples)
+        print(f"Total: {len(self.examples)} examples ({total_skipped} skipped)")
         lengths = [len(e) for e in self.examples]
         print(f"Token lengths: min={min(lengths)}, max={max(lengths)}, avg={sum(lengths)/len(lengths):.0f}")
 
@@ -100,15 +114,16 @@ class SFTDataset:
             input_ids[i, :seq_len] = torch.tensor(tokens[:seq_len])
 
             # Only compute loss on assistant responses (between assistant_start and assistant_end)
+            # labels[j] = tokens[j+1] means: at position j, predict the next token
             in_assistant = False
             for j in range(seq_len - 1):
                 if tokens[j] == self.assistant_start_id:
                     in_assistant = True
+                    # Predict first assistant token from the assistant_start position
+                    labels[i, j] = tokens[j + 1]
                     continue
                 if tokens[j] == self.assistant_end_id:
                     in_assistant = False
-                    # Include the end token itself as a target
-                    labels[i, j - 1] = tokens[j]
                     continue
                 if in_assistant:
                     labels[i, j] = tokens[j + 1]
@@ -146,7 +161,8 @@ def load_pretrained_weights(model: PicoChatGPT, checkpoint_path: str):
             layer_idx = parts[1]
             new_state_dict[f"value_embeds.{layer_idx}.weight"] = tensor
 
-    model.load_state_dict(new_state_dict, strict=True)
+    # strict=False: RoPE cos/sin buffers are computed, not saved in checkpoint
+    model.load_state_dict(new_state_dict, strict=False)
     print(f"Loaded {len(new_state_dict)} tensors")
 
 
@@ -168,8 +184,8 @@ def main():
 
     # SFT hyperparameters — lower LR, fewer steps than pretraining
     batch_size = 4
-    max_steps = 3000
-    max_lr = 2e-5
+    max_steps = 6000
+    max_lr = 3e-5
     min_lr = max_lr * 0.1
     warmup_steps = 100
     weight_decay = 0.01
@@ -179,6 +195,7 @@ def main():
 
     pretrained_path = "runs/gpu-pretrain/model.safetensors"
     sft_data_path = "data/sft_filtered.jsonl"
+    factual_data_path = "data/factual_qa.jsonl"
     tokenizer_path = "runs/tok-owt.json"
     output_dir = "runs/gpu-sft"
 
@@ -211,9 +228,13 @@ def main():
         progress = (step - warmup_steps) / max(1, max_steps - warmup_steps)
         return min_lr + 0.5 * (max_lr - min_lr) * (1 + math.cos(math.pi * progress))
 
-    # Dataset
+    # Dataset — upsample factual Q&A 40x so it's ~60% of training data
     tokenizer = PicoChatTokenizer(tokenizer_path)
-    dataset = SFTDataset(sft_data_path, tokenizer, seq_len=512)
+    data_sources = [
+        (sft_data_path, 1),
+        (factual_data_path, 40),
+    ]
+    dataset = SFTDataset(data_sources, tokenizer, seq_len=512)
 
     # Training
     print(f"\nStarting SFT: {max_steps} steps, batch_size={batch_size}")
