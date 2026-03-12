@@ -16,6 +16,8 @@ fn test_pretrain_config_defaults() {
         save_every: 500,
         save_dir: "checkpoints".to_string(),
         depth: 4,
+        resume_from: None,
+        start_step: 0,
     };
     assert_eq!(config.total_steps, 1000);
     assert_eq!(config.batch_size, 4);
@@ -38,6 +40,8 @@ fn test_pretrain_tokens_per_step() {
         save_every: 100,
         save_dir: "checkpoints".to_string(),
         depth: 4,
+        resume_from: None,
+        start_step: 0,
     };
     assert_eq!(config.tokens_per_step(), 8 * 256);
 }
