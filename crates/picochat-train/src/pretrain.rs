@@ -26,6 +26,10 @@ pub struct PretrainConfig {
     pub save_every: usize,
     pub save_dir: String,
     pub depth: usize,
+    /// Resume from a checkpoint directory (loads weights and config).
+    pub resume_from: Option<String>,
+    /// Starting step for LR schedule when resuming.
+    pub start_step: usize,
 }
 
 impl PretrainConfig {
@@ -81,18 +85,27 @@ fn fill_loader(
 /// Run the pretraining loop.
 pub fn pretrain(config: &PretrainConfig, device: &Device) -> Result<()> {
     let tokenizer = Tokenizer::load(&config.tokenizer_path)?;
-    let mut model_config = GPTConfig::from_depth(config.depth);
-    // Use the tokenizer's actual vocab size instead of the hardcoded default
-    model_config.vocab_size = tokenizer.vocab_size();
+
+    let (model_config, varmap, model) = if let Some(ref ckpt_dir) = config.resume_from {
+        let mc = checkpoint::load_config(format!("{ckpt_dir}/config.json"))?;
+        let vm = VarMap::new();
+        let vb = VarBuilder::from_varmap(&vm, DType::F32, device);
+        let m = GPT::new(&mc, vb)?;
+        checkpoint::load_varmap(&vm, format!("{ckpt_dir}/model.safetensors"), device)?;
+        println!("Resumed from checkpoint: {ckpt_dir} (start_step={})", config.start_step);
+        (mc, vm, m)
+    } else {
+        let mut mc = GPTConfig::from_depth(config.depth);
+        mc.vocab_size = tokenizer.vocab_size();
+        let vm = VarMap::new();
+        let vb = VarBuilder::from_varmap(&vm, DType::F32, device);
+        let m = GPT::new(&mc, vb)?;
+        initialize_weights(&vm, &mc)?;
+        (mc, vm, m)
+    };
 
     println!("Pretrain: depth={}, seq_len={}, batch={}, steps={}",
-        config.depth, config.seq_len, config.batch_size, config.total_steps);
-
-    let varmap = VarMap::new();
-    let vb = VarBuilder::from_varmap(&varmap, DType::F32, device);
-    let model = GPT::new(&model_config, vb)?;
-    initialize_weights(&varmap, &model_config)?;
-
+        model_config.n_layer, config.seq_len, config.batch_size, config.total_steps);
     println!("Parameters: {} ({:.2}M)",
         model.num_parameters(), model.num_parameters() as f64 / 1e6);
 
@@ -104,6 +117,9 @@ pub fn pretrain(config: &PretrainConfig, device: &Device) -> Result<()> {
         config.min_lr_ratio,
     );
     let mut trainer = Trainer::with_schedule(&varmap, &model_config, schedule);
+    if config.start_step > 0 {
+        trainer.set_step_count(config.start_step);
+    }
 
     let train_files = collect_parquet_files(&config.data_dir)?;
     if train_files.is_empty() {
@@ -121,7 +137,7 @@ pub fn pretrain(config: &PretrainConfig, device: &Device) -> Result<()> {
 
     let start = std::time::Instant::now();
 
-    for step in 0..config.total_steps {
+    for step in config.start_step..config.total_steps {
         // Ensure enough packed sequences for a batch
         loop {
             let (bytes, exhausted) = fill_loader(

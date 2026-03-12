@@ -117,6 +117,10 @@ struct Cli {
     #[arg(long, default_value_t = 500)]
     save_every: usize,
 
+    /// Starting step when resuming pretraining (for LR schedule)
+    #[arg(long, default_value_t = 0)]
+    start_step: usize,
+
     /// Evaluation frequency during pretraining
     #[arg(long, default_value_t = 100)]
     eval_every: usize,
@@ -456,6 +460,8 @@ fn run_pretrain(cli: &Cli, device: &Device) -> Result<()> {
         save_every: cli.save_every,
         save_dir: save_dir.clone(),
         depth: cli.depth,
+        resume_from: cli.load.clone(),
+        start_step: cli.start_step,
     };
 
     picochat_train::pretrain::pretrain(&config, device)

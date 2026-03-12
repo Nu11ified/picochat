@@ -1,0 +1,35 @@
+#!/bin/bash
+# Automated SFT + evaluation when a pretrain checkpoint becomes available.
+# Usage: ./run_sft_on_checkpoint.sh <checkpoint_dir> [sft_version]
+#
+# Waits for the checkpoint to exist, runs SFT, then evaluates.
+
+set -e
+export PATH="/usr/bin:/home/nullify/.cargo/bin:$PATH"
+
+CKPT="${1:?Usage: $0 <checkpoint_dir> [sft_version]}"
+VERSION="${2:-v3}"
+PICOCHAT="/data/github/picochat/target/release/picochat"
+TOK="/data/github/picochat/data/tinystories/tok.json"
+SFT_DIR="/data/github/picochat/runs/tinystories-sft-${VERSION}"
+SFT_DATA="/data/github/picochat/data/tinystories/sft_uncertainty.jsonl:1.0,/data/github/picochat/data/tinystories/sft_expanded.jsonl:2.0,/data/github/picochat/data/tinystories/sft_reasoning.jsonl:1.0,/data/github/picochat/data/tinystories/sft_common.jsonl:2.0,/data/github/picochat/data/tinystories/sft_multiturn.jsonl:0.5"
+
+echo "=== Waiting for checkpoint: $CKPT ==="
+while [ ! -f "$CKPT/model.safetensors" ]; do
+    sleep 60
+done
+echo "=== Checkpoint found! Starting SFT ==="
+
+$PICOCHAT --sft --load "$CKPT" \
+    --tokenizer "$TOK" \
+    --sft-data "$SFT_DATA" \
+    --batch-size 2 --seq-len 256 --steps 3000 --max-lr 0.0003 \
+    --warmup-steps 100 --min-lr-ratio 0.1 \
+    --save "$SFT_DIR" --save-every 1000
+
+echo "=== SFT complete. Running evaluation ==="
+/data/github/picochat/eval_chat.sh "$SFT_DIR" "$TOK"
+
+echo "=== Pipeline complete ==="
+echo "SFT model: $SFT_DIR"
+echo "Based on pretrain: $CKPT"

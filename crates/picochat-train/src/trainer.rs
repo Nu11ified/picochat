@@ -59,6 +59,11 @@ impl Trainer {
         self.step_count
     }
 
+    /// Set the step count for LR schedule offset when resuming training.
+    pub fn set_step_count(&mut self, step: usize) {
+        self.step_count = step;
+    }
+
     pub fn schedule_ref(&self) -> Option<&LrSchedule> {
         self.schedule.as_ref()
     }
