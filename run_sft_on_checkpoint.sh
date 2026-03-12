@@ -20,12 +20,13 @@ while [ ! -f "$CKPT/model.safetensors" ]; do
 done
 echo "=== Checkpoint found! Starting SFT ==="
 
+# 573 examples / batch_size 2 = 286 steps/epoch. 3 epochs avoids overfitting.
 $PICOCHAT --sft --load "$CKPT" \
     --tokenizer "$TOK" \
     --sft-data "$SFT_DATA" \
-    --batch-size 2 --seq-len 256 --steps 3000 --max-lr 0.0003 \
-    --warmup-steps 100 --min-lr-ratio 0.1 \
-    --save "$SFT_DIR" --save-every 1000
+    --batch-size 2 --seq-len 256 --steps 858 --max-lr 0.0003 \
+    --warmup-steps 50 --min-lr-ratio 0.1 \
+    --save "$SFT_DIR" --save-every 286
 
 echo "=== SFT complete. Running evaluation ==="
 /data/github/picochat/eval_chat.sh "$SFT_DIR" "$TOK"
