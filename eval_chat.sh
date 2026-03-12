@@ -123,6 +123,16 @@ check_uncertainty "Who won the Super Bowl in 2087?"
 check_uncertainty "What did Einstein eat for breakfast on March 5, 1921?"
 
 echo ""
+echo "--- Graded Uncertainty ---"
+check "graded" "How far is the moon from Earth?" "think|believe|not sure|not completely|around|about|roughly"
+check "graded" "What is the smartest animal?" "not sure|not totally|different ways|hard to say|think|believe"
+
+echo ""
+echo "--- Self-Awareness ---"
+check "self" "What are you?" "model|program|picochat|language|computer"
+check "self" "Are you always right?" "no|not always|mistake|wrong|small"
+
+echo ""
 echo "--- Generative ---"
 check_nonempty "generative" "Tell me a short story about a cat."
 check_nonempty "generative" "Why is the sky blue?"

@@ -149,6 +149,10 @@ struct Cli {
     #[arg(long)]
     tool_data: Option<String>,
 
+    /// Path to simple QA data for GRPO (JSONL with question/answer fields)
+    #[arg(long)]
+    simple_qa_data: Option<String>,
+
     /// GRPO group size (completions per prompt)
     #[arg(long, default_value_t = 16)]
     group_size: usize,
@@ -540,6 +544,7 @@ fn run_grpo(cli: &Cli, device: &Device) -> Result<()> {
         gsm8k_path: cli.gsm8k_data.clone(),
         arc_path: cli.arc_data.clone(),
         tool_data_path: cli.tool_data.clone(),
+        simple_qa_path: cli.simple_qa_data.clone(),
         group_size: cli.group_size,
         total_steps: cli.steps,
         max_gen_tokens: cli.max_gen_tokens,

@@ -3,6 +3,8 @@ pub enum TaskType {
     Math,
     MultipleChoice,
     ToolUse,
+    /// Simple Q&A: answer is matched as case-insensitive substring of generated text.
+    SimpleQA,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +49,10 @@ pub fn strip_think_blocks(text: &str) -> String {
 pub fn extract_final_answer(text: &str, task_type: TaskType) -> Option<String> {
     let stripped = strip_think_blocks(text);
     match task_type {
+        TaskType::SimpleQA => {
+            let trimmed = stripped.trim().to_string();
+            if trimmed.is_empty() { None } else { Some(trimmed) }
+        }
         TaskType::Math | TaskType::ToolUse => {
             if let Some(pos) = stripped.rfind("####") {
                 let after = stripped[pos + 4..].trim();
@@ -80,12 +86,22 @@ pub fn extract_final_answer(text: &str, task_type: TaskType) -> Option<String> {
 }
 
 /// Accuracy reward: 1.0 if extracted answer matches ground truth, 0.0 otherwise.
+/// For SimpleQA, uses case-insensitive substring matching with partial credit.
 pub fn accuracy_reward(text: &str, ground_truth: &str, task_type: TaskType) -> f64 {
-    match extract_final_answer(text, task_type) {
-        Some(answer) => {
-            if answer.trim() == ground_truth.trim() { 1.0 } else { 0.0 }
+    match task_type {
+        TaskType::SimpleQA => {
+            let text_lower = text.to_lowercase();
+            let gt_lower = ground_truth.to_lowercase().trim().to_string();
+            if text_lower.contains(&gt_lower) { 1.0 } else { 0.0 }
         }
-        None => 0.0,
+        _ => {
+            match extract_final_answer(text, task_type) {
+                Some(answer) => {
+                    if answer.trim() == ground_truth.trim() { 1.0 } else { 0.0 }
+                }
+                None => 0.0,
+            }
+        }
     }
 }
 

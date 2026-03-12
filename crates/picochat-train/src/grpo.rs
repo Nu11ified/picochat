@@ -22,6 +22,7 @@ pub struct GrpoConfig {
     pub gsm8k_path: Option<String>,
     pub arc_path: Option<String>,
     pub tool_data_path: Option<String>,
+    pub simple_qa_path: Option<String>,
     pub group_size: usize,
     pub total_steps: usize,
     pub max_gen_tokens: usize,
@@ -42,6 +43,7 @@ impl Default for GrpoConfig {
             gsm8k_path: None,
             arc_path: None,
             tool_data_path: None,
+            simple_qa_path: None,
             group_size: 16,
             total_steps: 1000,
             max_gen_tokens: 512,
@@ -149,6 +151,23 @@ fn build_prompt_pool(
                 ground_truth: s.expected_answer.clone(),
                 task_type: TaskType::ToolUse,
                 requires_tool: s.requires_tool,
+            });
+        }
+    }
+
+    if let Some(path) = &config.simple_qa_path {
+        let questions = load_gsm8k_jsonl(path)?;
+        println!("GRPO: loaded {} simple QA questions", questions.len());
+        for q in &questions {
+            let prompt_text = format!(
+                "<|bos|><|user_start|>{}<|user_end|><|assistant_start|>",
+                q.question
+            );
+            prompts.push(TrainingPrompt {
+                prompt_text,
+                ground_truth: q.answer.clone(),
+                task_type: TaskType::SimpleQA,
+                requires_tool: false,
             });
         }
     }
@@ -282,7 +301,7 @@ pub fn grpo(config: &GrpoConfig, device: &Device) -> Result<()> {
 
     let prompts = build_prompt_pool(config, &gsm_exemplars, &arc_exemplars)?;
     if prompts.is_empty() {
-        anyhow::bail!("GRPO: no training data loaded. Provide at least one of --gsm8k-data, --arc-data, --tool-data");
+        anyhow::bail!("GRPO: no training data loaded. Provide at least one of --gsm8k-data, --arc-data, --tool-data, --simple-qa-data");
     }
     println!("GRPO: {} total training prompts", prompts.len());
 
