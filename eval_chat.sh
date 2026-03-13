@@ -23,7 +23,7 @@ ask() {
     response=$(echo "$question" | timeout "$TIMEOUT_SEC" "$PICOCHAT" \
         --chat --load "$CKPT" --tokenizer "$TOK" \
         --max-tokens "$MAX_TOKENS" --temperature "$TEMP" 2>/dev/null \
-        | sed -n '4p')
+        | sed -n '4p' || true)
     echo "$response"
 }
 
@@ -48,14 +48,14 @@ check() {
         echo "  PASS [$category] Q: $question"
         echo "       A: $response"
         PASS=$((PASS + 1))
-        [ "$is_novel" = "1" ] && NOVEL_PASS=$((NOVEL_PASS + 1))
+        [ "$is_novel" = "1" ] && NOVEL_PASS=$((NOVEL_PASS + 1)) || true
     else
         echo "  FAIL [$category] Q: $question"
         echo "       A: $response"
         echo "       Expected pattern: $expected"
         FAIL=$((FAIL + 1))
     fi
-    [ "$is_novel" = "1" ] && NOVEL_TOTAL=$((NOVEL_TOTAL + 1))
+    [ "$is_novel" = "1" ] && NOVEL_TOTAL=$((NOVEL_TOTAL + 1)) || true
 }
 
 check_uncertainty() {
@@ -70,14 +70,14 @@ check_uncertainty() {
         echo "  PASS [uncertainty] Q: $question"
         echo "       A: $response"
         PASS=$((PASS + 1))
-        [ "$is_novel" = "1" ] && NOVEL_PASS=$((NOVEL_PASS + 1))
+        [ "$is_novel" = "1" ] && NOVEL_PASS=$((NOVEL_PASS + 1)) || true
     else
         echo "  FAIL [uncertainty] Q: $question"
         echo "       A: $response"
         echo "       Expected: uncertainty expression"
         FAIL=$((FAIL + 1))
     fi
-    [ "$is_novel" = "1" ] && NOVEL_TOTAL=$((NOVEL_TOTAL + 1))
+    [ "$is_novel" = "1" ] && NOVEL_TOTAL=$((NOVEL_TOTAL + 1)) || true
 }
 
 check_nonempty() {
@@ -93,14 +93,14 @@ check_nonempty() {
         echo "  PASS [$category] Q: $question"
         echo "       A: $response"
         PASS=$((PASS + 1))
-        [ "$is_novel" = "1" ] && NOVEL_PASS=$((NOVEL_PASS + 1))
+        [ "$is_novel" = "1" ] && NOVEL_PASS=$((NOVEL_PASS + 1)) || true
     else
         echo "  FAIL [$category] Q: $question"
         echo "       A: $response"
         echo "       Expected: non-trivial response (>10 chars)"
         FAIL=$((FAIL + 1))
     fi
-    [ "$is_novel" = "1" ] && NOVEL_TOTAL=$((NOVEL_TOTAL + 1))
+    [ "$is_novel" = "1" ] && NOVEL_TOTAL=$((NOVEL_TOTAL + 1)) || true
 }
 
 echo "============================================"

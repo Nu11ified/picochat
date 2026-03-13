@@ -405,7 +405,10 @@ fn run_chat(cli: &Cli, device: &Device) -> Result<()> {
         io::stdout().flush()?;
 
         let mut input = String::new();
-        stdin.lock().read_line(&mut input)?;
+        let bytes_read = stdin.lock().read_line(&mut input)?;
+        if bytes_read == 0 {
+            break; // EOF — stdin pipe closed
+        }
         let input = input.trim();
 
         if input.is_empty() {

@@ -12,7 +12,9 @@ VERSION="${2:-v3}"
 PICOCHAT="/data/github/picochat/target/release/picochat"
 TOK="/data/github/picochat/data/tinystories/tok.json"
 SFT_DIR="/data/github/picochat/runs/tinystories-sft-${VERSION}"
-SFT_DATA="/data/github/picochat/data/tinystories/sft_uncertainty.jsonl:1.0,/data/github/picochat/data/tinystories/sft_expanded.jsonl:2.0,/data/github/picochat/data/tinystories/sft_reasoning.jsonl:1.0,/data/github/picochat/data/tinystories/sft_common.jsonl:2.0,/data/github/picochat/data/tinystories/sft_multiturn.jsonl:0.5,/data/github/picochat/data/tinystories/sft_cot.jsonl:2.0,/data/github/picochat/data/tinystories/sft_graded_uncertainty.jsonl:1.5,/data/github/picochat/data/tinystories/sft_self_awareness.jsonl:1.0"
+# Weights balanced so each example is seen ~3x across 3 epochs regardless of dataset size.
+# Dataset sizes: uncertainty=89, expanded=162, reasoning=60, common=136, multiturn=25, cot=51, graded=35, self_awareness=15
+SFT_DATA="/data/github/picochat/data/tinystories/sft_uncertainty.jsonl:1.0,/data/github/picochat/data/tinystories/sft_expanded.jsonl:1.8,/data/github/picochat/data/tinystories/sft_reasoning.jsonl:1.0,/data/github/picochat/data/tinystories/sft_common.jsonl:1.5,/data/github/picochat/data/tinystories/sft_multiturn.jsonl:0.3,/data/github/picochat/data/tinystories/sft_cot.jsonl:0.9,/data/github/picochat/data/tinystories/sft_graded_uncertainty.jsonl:0.5,/data/github/picochat/data/tinystories/sft_self_awareness.jsonl:0.25"
 
 echo "=== Waiting for checkpoint: $CKPT ==="
 while [ ! -f "$CKPT/model.safetensors" ]; do
