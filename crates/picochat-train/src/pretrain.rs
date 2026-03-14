@@ -121,6 +121,16 @@ pub fn pretrain(config: &PretrainConfig, device: &Device) -> Result<()> {
         trainer.set_step_count(config.start_step);
     }
 
+    // Restore optimizer momentum/variance if saved alongside checkpoint
+    if let Some(ref ckpt_dir) = config.resume_from {
+        let opt_path = format!("{ckpt_dir}/optimizer.safetensors");
+        let opt_tensors = checkpoint::load_optimizer(&opt_path, device)?;
+        if !opt_tensors.is_empty() {
+            trainer.load_optimizer_state(&opt_tensors)?;
+            println!("Restored optimizer state ({} tensors)", opt_tensors.len());
+        }
+    }
+
     let train_files = collect_parquet_files(&config.data_dir)?;
     if train_files.is_empty() {
         anyhow::bail!("No parquet files found in {}", config.data_dir);
@@ -188,6 +198,8 @@ pub fn pretrain(config: &PretrainConfig, device: &Device) -> Result<()> {
             std::fs::create_dir_all(&ckpt_dir)?;
             checkpoint::save_varmap(&varmap, format!("{ckpt_dir}/model.safetensors"))?;
             checkpoint::save_config(&model_config, format!("{ckpt_dir}/config.json"))?;
+            let opt_state = trainer.save_optimizer_state()?;
+            checkpoint::save_optimizer(&opt_state, format!("{ckpt_dir}/optimizer.safetensors"))?;
             println!("Checkpoint saved to {ckpt_dir}/");
         }
     }
@@ -195,6 +207,8 @@ pub fn pretrain(config: &PretrainConfig, device: &Device) -> Result<()> {
     std::fs::create_dir_all(&config.save_dir)?;
     checkpoint::save_varmap(&varmap, format!("{}/model.safetensors", config.save_dir))?;
     checkpoint::save_config(&model_config, format!("{}/config.json", config.save_dir))?;
+    let opt_state = trainer.save_optimizer_state()?;
+    checkpoint::save_optimizer(&opt_state, format!("{}/optimizer.safetensors", config.save_dir))?;
     println!("Final checkpoint saved to {}/", config.save_dir);
 
     let elapsed = start.elapsed().as_secs_f64();

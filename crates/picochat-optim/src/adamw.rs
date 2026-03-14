@@ -40,6 +40,16 @@ impl AdamW {
         self.default_lr
     }
 
+    /// Get the state (m, v, step) for a variable, if it exists.
+    pub fn get_state(&self, id: TensorId) -> Option<(&Tensor, &Tensor, usize)> {
+        self.states.get(&id).map(|s| (&s.m, &s.v, s.step))
+    }
+
+    /// Inject optimizer state for a variable (used when restoring from checkpoint).
+    pub fn set_state(&mut self, id: TensorId, m: Tensor, v: Tensor, step: usize) {
+        self.states.insert(id, AdamWState { m, v, step });
+    }
+
     /// Perform one AdamW update for a single variable.
     ///
     /// 1. Decoupled weight decay: `theta = theta * (1 - lr * wd)`

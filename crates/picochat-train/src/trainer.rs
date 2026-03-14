@@ -4,6 +4,7 @@ use picochat_core::config::GPTConfig;
 use picochat_core::model::GPT;
 use picochat_optim::LrSchedule;
 use picochat_optim::MuonAdamW;
+use std::collections::HashMap;
 
 pub struct Trainer {
     optimizer: MuonAdamW,
@@ -70,5 +71,15 @@ impl Trainer {
 
     pub fn optimizer_mut(&mut self) -> &mut MuonAdamW {
         &mut self.optimizer
+    }
+
+    /// Export optimizer state tensors for checkpointing.
+    pub fn save_optimizer_state(&self) -> Result<HashMap<String, Tensor>> {
+        self.optimizer.save_state()
+    }
+
+    /// Restore optimizer state from checkpoint tensors.
+    pub fn load_optimizer_state(&mut self, tensors: &HashMap<String, Tensor>) -> Result<()> {
+        self.optimizer.load_state(tensors)
     }
 }

@@ -36,3 +36,17 @@ pub fn load_config<P: AsRef<Path>>(path: P) -> Result<GPTConfig> {
     let json = std::fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }
+
+pub fn save_optimizer<P: AsRef<Path>>(tensors: &HashMap<String, Tensor>, path: P) -> Result<()> {
+    safetensors::save(tensors, path)?;
+    Ok(())
+}
+
+pub fn load_optimizer<P: AsRef<Path>>(path: P, device: &Device) -> Result<HashMap<String, Tensor>> {
+    let path = path.as_ref();
+    if path.exists() {
+        Ok(safetensors::load(path, device)?)
+    } else {
+        Ok(HashMap::new())
+    }
+}

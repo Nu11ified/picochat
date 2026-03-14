@@ -82,6 +82,16 @@ impl Muon {
         self.default_lr
     }
 
+    /// Get the momentum buffer for a variable, if it exists.
+    pub fn get_state(&self, id: TensorId) -> Option<&Tensor> {
+        self.states.get(&id).map(|s| &s.buf)
+    }
+
+    /// Inject momentum buffer for a variable (used when restoring from checkpoint).
+    pub fn set_state(&mut self, id: TensorId, buf: Tensor) {
+        self.states.insert(id, MuonState { buf });
+    }
+
     /// Perform one Muon update for a single variable.
     ///
     /// 1. Nesterov momentum: `buf = beta * buf + grad`,

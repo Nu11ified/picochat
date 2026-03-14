@@ -1,5 +1,6 @@
 use candle_core::{Result, Tensor, Var};
 use candle_nn::VarMap;
+use std::collections::HashMap;
 
 use crate::adamw::AdamW;
 use crate::muon::Muon;
@@ -162,5 +163,52 @@ impl MuonAdamW {
             .iter()
             .map(|r| (r.name.as_str(), r.use_muon, r.lr))
             .collect()
+    }
+
+    /// Export all optimizer state tensors keyed by parameter name.
+    ///
+    /// Keys use the format `adamw.{name}.m`, `adamw.{name}.v`,
+    /// `adamw.{name}.step` (as 1-element f32 tensor), or `muon.{name}.buf`.
+    pub fn save_state(&self) -> Result<HashMap<String, Tensor>> {
+        let mut tensors = HashMap::new();
+        for route in &self.routes {
+            let id = route.var.as_tensor().id();
+            if route.use_muon {
+                if let Some(buf) = self.muon.get_state(id) {
+                    tensors.insert(format!("muon.{}.buf", route.name), buf.clone());
+                }
+            } else if let Some((m, v, step)) = self.adamw.get_state(id) {
+                tensors.insert(format!("adamw.{}.m", route.name), m.clone());
+                tensors.insert(format!("adamw.{}.v", route.name), v.clone());
+                let step_t = Tensor::new(&[step as f32], m.device())?;
+                tensors.insert(format!("adamw.{}.step", route.name), step_t);
+            }
+        }
+        Ok(tensors)
+    }
+
+    /// Restore optimizer state from named tensors (inverse of `save_state`).
+    pub fn load_state(&mut self, tensors: &HashMap<String, Tensor>) -> Result<()> {
+        for route in &self.routes {
+            let id = route.var.as_tensor().id();
+            if route.use_muon {
+                let key = format!("muon.{}.buf", route.name);
+                if let Some(buf) = tensors.get(&key) {
+                    self.muon.set_state(id, buf.clone());
+                }
+            } else {
+                let m_key = format!("adamw.{}.m", route.name);
+                let v_key = format!("adamw.{}.v", route.name);
+                let step_key = format!("adamw.{}.step", route.name);
+                if let (Some(m), Some(v)) = (tensors.get(&m_key), tensors.get(&v_key)) {
+                    let step = tensors.get(&step_key)
+                        .map(|t| t.to_vec1::<f32>().unwrap_or_default())
+                        .and_then(|v| v.first().copied())
+                        .unwrap_or(0.0) as usize;
+                    self.adamw.set_state(id, m.clone(), v.clone(), step);
+                }
+            }
+        }
+        Ok(())
     }
 }
