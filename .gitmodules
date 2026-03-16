@@ -1,0 +1,3 @@
+[submodule "candle-rocm"]
+	path = candle-rocm
+	url = /data/github/candle-rocm
